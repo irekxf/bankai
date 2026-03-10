@@ -8,10 +8,12 @@ use crate::{
         messages::create_message,
         sessions::{ensure_session, touch_session},
         tool_calls::create_pending_tool_call,
+        tool_settings::list_tool_enabled_map,
     },
     providers::openai::{create_tool_aware_response, ModelTurn},
     settings::load_provider_config,
     state::AppState,
+    tools::registry::build_tool_list,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -46,6 +48,17 @@ pub async fn start_message_run(
         state.db.clone()
     };
 
+    let enabled_tools: Vec<String> = {
+        let enabled_map = list_tool_enabled_map(&db)
+            .await
+            .map_err(|error| error.to_string())?;
+        build_tool_list(&enabled_map)
+            .into_iter()
+            .filter(|tool| tool.enabled)
+            .map(|tool| tool.name)
+            .collect()
+    };
+
     ensure_session(&db, &session_id, "New chat")
         .await
         .map_err(|error| error.to_string())?;
@@ -53,7 +66,7 @@ pub async fn start_message_run(
         .await
         .map_err(|error| error.to_string())?;
 
-    match create_tool_aware_response(&config, &text).await {
+    match create_tool_aware_response(&config, &text, &enabled_tools).await {
         Ok(ModelTurn::Text(full_response)) => {
             let message_id = Uuid::new_v4().to_string();
             app.emit(

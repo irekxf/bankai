@@ -12,6 +12,7 @@ use crate::{
         tool_calls::{
             list_pending_tool_calls as list_pending_tool_call_records, mark_tool_call_status,
         },
+        tool_settings::{list_tool_enabled_map, set_tool_enabled},
     },
     oauth::{clear_oauth_session, get_oauth_status, start_oauth_login, OAuthStatus},
     providers::openai::{continue_after_function_output, list_models as list_openai_models},
@@ -20,9 +21,12 @@ use crate::{
         ProviderConfig, SaveProviderConfigInput,
     },
     state::AppState,
-    tools::browser::{execute_browser, BrowserRequest},
-    tools::filesystem::{execute_filesystem, FilesystemRequest},
-    tools::shell::execute_shell,
+    tools::{
+        browser::{execute_browser, BrowserRequest},
+        filesystem::{execute_filesystem, FilesystemRequest},
+        registry::{build_tool_list, is_known_tool, ToolInfo},
+        shell::execute_shell,
+    },
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -192,6 +196,32 @@ pub async fn clear_oauth_session_command(app: AppHandle) -> Result<(), String> {
     clear_oauth_session().map_err(|error| error.to_string())?;
     let _ = set_preferred_auth(&app, PreferredAuth::Auto);
     Ok(())
+}
+
+#[tauri::command]
+pub async fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolInfo>, String> {
+    let enabled_map = list_tool_enabled_map(&state.db)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(build_tool_list(&enabled_map))
+}
+
+#[tauri::command]
+pub async fn set_tool_enabled_command(
+    name: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<Vec<ToolInfo>, String> {
+    if !is_known_tool(&name) {
+        return Err(format!("Unknown tool: {}", name));
+    }
+    set_tool_enabled(&state.db, &name, enabled)
+        .await
+        .map_err(|error| error.to_string())?;
+    let enabled_map = list_tool_enabled_map(&state.db)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(build_tool_list(&enabled_map))
 }
 
 async fn run_approved_tool(

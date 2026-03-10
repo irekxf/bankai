@@ -48,6 +48,13 @@ export interface ProviderModelsDto {
   models: string[];
 }
 
+export interface ToolInfoDto {
+  name: string;
+  description: string;
+  requiresApproval: boolean;
+  enabled: boolean;
+}
+
 export interface SaveProviderConfigPayload {
   provider: "openai";
   displayName: string;
@@ -109,4 +116,12 @@ export async function saveProviderConfig(
   payload: SaveProviderConfigPayload
 ): Promise<ProviderConfigDto> {
   return invoke<ProviderConfigDto>("save_provider_config_command", { config: payload });
+}
+
+export async function listTools(): Promise<ToolInfoDto[]> {
+  return invoke<ToolInfoDto[]>("list_tools");
+}
+
+export async function setToolEnabled(name: string, enabled: boolean): Promise<ToolInfoDto[]> {
+  return invoke<ToolInfoDto[]>("set_tool_enabled_command", { name, enabled });
 }

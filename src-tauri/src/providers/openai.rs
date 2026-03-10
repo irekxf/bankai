@@ -53,13 +53,14 @@ pub async fn list_models(config: &ProviderConfig) -> Result<Vec<String>, AppErro
 pub async fn create_tool_aware_response(
     config: &ProviderConfig,
     prompt: &str,
+    enabled_tools: &[String],
 ) -> Result<ModelTurn, AppError> {
     let client = build_client(config).await?;
     let request = CreateResponseArgs::default()
         .model(config.model.clone())
         .input(prompt)
         .parallel_tool_calls(false)
-        .tools(vec![shell_tool(), filesystem_tool(), browser_tool()])
+        .tools(build_enabled_tools(enabled_tools))
         .build()
         .map_err(|error| AppError::Message(error.to_string()))?;
 
@@ -110,6 +111,18 @@ async fn build_client(config: &ProviderConfig) -> Result<Client<OpenAIConfig>, A
         .with_api_key(api_key)
         .with_api_base(config.base_url.clone());
     Ok(Client::with_config(openai_config))
+}
+
+fn build_enabled_tools(enabled_tools: &[String]) -> Vec<Tool> {
+    enabled_tools
+        .iter()
+        .filter_map(|name| match name.as_str() {
+            "shell" => Some(shell_tool()),
+            "filesystem" => Some(filesystem_tool()),
+            "browser" => Some(browser_tool()),
+            _ => None,
+        })
+        .collect()
 }
 
 fn shell_tool() -> Tool {

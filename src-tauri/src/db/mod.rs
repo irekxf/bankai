@@ -1,6 +1,7 @@
 pub mod messages;
 pub mod sessions;
 pub mod tool_calls;
+pub mod tool_settings;
 
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
@@ -72,6 +73,18 @@ pub async fn init(app: &AppHandle) -> Result<SqlitePool, AppError> {
             arguments_json TEXT NOT NULL,
             status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected', 'completed')),
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .map_err(|error| AppError::Message(error.to_string()))?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS tool_settings (
+            name TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL DEFAULT 1
         );
         "#,
     )
