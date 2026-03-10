@@ -1,4 +1,4 @@
-﻿# Multi-Agent Workflow
+# Multi-Agent Workflow
 
 ## Goal
 
@@ -57,7 +57,7 @@ A task is done only if:
 
 ## Current Coordination Decision
 
-Current product direction comes from [project.md](/D:/bankai/project.md):
+Current product direction comes from [project.md](../project.md):
 - OAuth is an accepted auth path for the project
 - API key is also supported
 - shell tool requires approval
@@ -65,3 +65,4 @@ Current product direction comes from [project.md](/D:/bankai/project.md):
 - desktop app should expose explicit tool execution state to the user
 
 If current code conflicts with `project.md`, task PRs should move the code toward the latest documented product direction unless the coordinator says otherwise.
+

@@ -16,13 +16,13 @@ Stabilize provider and auth UX.
 
 Read these files first:
 
-- [docs/tasks/BACKLOG.md](/D:/bankai/docs/tasks/BACKLOG.md)
-- [src/components/settings/ProviderConfig.svelte](/D:/bankai/src/components/settings/ProviderConfig.svelte)
-- [src/components/settings/OAuthOnboarding.svelte](/D:/bankai/src/components/settings/OAuthOnboarding.svelte)
-- [src/lib/stores/auth.ts](/D:/bankai/src/lib/stores/auth.ts)
-- [src/lib/stores/settings.ts](/D:/bankai/src/lib/stores/settings.ts)
-- [src-tauri/src/settings.rs](/D:/bankai/src-tauri/src/settings.rs)
-- [src-tauri/src/ipc/commands.rs](/D:/bankai/src-tauri/src/ipc/commands.rs)
+- [docs/tasks/BACKLOG.md](../tasks/BACKLOG.md)
+- [src/components/settings/ProviderConfig.svelte](../../src/components/settings/ProviderConfig.svelte)
+- [src/components/settings/OAuthOnboarding.svelte](../../src/components/settings/OAuthOnboarding.svelte)
+- [src/lib/stores/auth.ts](../../src/lib/stores/auth.ts)
+- [src/lib/stores/settings.ts](../../src/lib/stores/settings.ts)
+- [src-tauri/src/settings.rs](../../src-tauri/src/settings.rs)
+- [src-tauri/src/ipc/commands.rs](../../src-tauri/src/ipc/commands.rs)
 
 ## Desired Outcome
 

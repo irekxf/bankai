@@ -52,19 +52,20 @@ Rules:
   - `codex/<task-slug>`
   - `claude/<task-slug>`
 
-See [docs/AGENT_COORDINATION.md](/D:/bankai/docs/AGENT_COORDINATION.md) for coordination rules and [docs/tasks/claude-next.md](/D:/bankai/docs/tasks/claude-next.md) for the current task queue.
+See [docs/AGENT_COORDINATION.md](docs/AGENT_COORDINATION.md) for coordination rules and [docs/tasks/claude-next.md](docs/tasks/claude-next.md) for the current task queue.
 
 ## Persistent Context In Repo
 
 To resume work from a cold start, use the Markdown workflow in this repo:
 
-- [docs/WORKFLOW.md](/D:/bankai/docs/WORKFLOW.md)
-- [docs/context/CURRENT_STATE.md](/D:/bankai/docs/context/CURRENT_STATE.md)
-- [docs/tasks/BACKLOG.md](/D:/bankai/docs/tasks/BACKLOG.md)
-- [docs/context/NEXT_SESSION.md](/D:/bankai/docs/context/NEXT_SESSION.md)
-- [docs/handoffs/](/D:/bankai/docs/handoffs/)
+- [docs/WORKFLOW.md](docs/WORKFLOW.md)
+- [docs/context/CURRENT_STATE.md](docs/context/CURRENT_STATE.md)
+- [docs/tasks/BACKLOG.md](docs/tasks/BACKLOG.md)
+- [docs/context/NEXT_SESSION.md](docs/context/NEXT_SESSION.md)
+- [docs/handoffs/](docs/handoffs/)
 
 These files are intended to preserve implementation context between sessions, branches, and agents.
+
 ## Local commands
 
 ```bash
@@ -74,4 +75,3 @@ bun run check
 ```
 
 Rust/Tauri build commands depend on local Tauri setup and platform requirements.
-

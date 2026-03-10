@@ -6,12 +6,12 @@ This repository keeps project context in Markdown so a new human or agent can re
 
 When starting fresh, read files in this order:
 
-1. [project.md](/D:/bankai/project.md)
-2. [README.md](/D:/bankai/README.md)
-3. [docs/context/CURRENT_STATE.md](/D:/bankai/docs/context/CURRENT_STATE.md)
-4. [docs/tasks/BACKLOG.md](/D:/bankai/docs/tasks/BACKLOG.md)
-5. [docs/context/NEXT_SESSION.md](/D:/bankai/docs/context/NEXT_SESSION.md)
-6. [docs/AGENT_COORDINATION.md](/D:/bankai/docs/AGENT_COORDINATION.md)
+1. [project.md](../project.md)
+2. [README.md](../README.md)
+3. [docs/context/CURRENT_STATE.md](context/CURRENT_STATE.md)
+4. [docs/tasks/BACKLOG.md](tasks/BACKLOG.md)
+5. [docs/context/NEXT_SESSION.md](context/NEXT_SESSION.md)
+6. [docs/AGENT_COORDINATION.md](AGENT_COORDINATION.md)
 
 ## Source Of Truth
 
