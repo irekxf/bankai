@@ -1,12 +1,51 @@
 <script lang="ts">
+  import { agentStatus } from "../../lib/stores/agent";
+  import { appendMessage } from "../../lib/stores/messages";
+  import { currentSessionId } from "../../lib/stores/sessions";
+  import { sendMessage } from "../../lib/tauri/commands";
+
   let draft = $state("");
+
+  async function submitPrompt(event: SubmitEvent) {
+    event.preventDefault();
+
+    const prompt = draft.trim();
+    if (!prompt || $agentStatus !== "idle") {
+      return;
+    }
+
+    appendMessage({
+      id: crypto.randomUUID(),
+      role: "user",
+      content: prompt,
+      createdAt: new Date().toISOString()
+    });
+
+    draft = "";
+
+    try {
+      await sendMessage({
+        sessionId: $currentSessionId,
+        text: prompt
+      });
+    } catch (error) {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `Не удалось отправить сообщение: ${error instanceof Error ? error.message : "unknown error"}`,
+        createdAt: new Date().toISOString()
+      });
+    }
+  }
 </script>
 
-<form class="composer">
+<form class="composer" onsubmit={submitPrompt}>
   <textarea bind:value={draft} rows="4" placeholder="Опиши задачу для агента..."></textarea>
   <div class="actions">
-    <small>Enter позже привяжем к `send_message`.</small>
-    <md-filled-button type="submit">Send</md-filled-button>
+    <small>
+      {$agentStatus === "idle" ? "Запрос уйдёт в OpenAI API." : "Агент сейчас обрабатывает запрос."}
+    </small>
+    <md-filled-button disabled={$agentStatus !== "idle"} type="submit">Send</md-filled-button>
   </div>
 </form>
 

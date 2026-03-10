@@ -4,15 +4,10 @@ export type AgentStatus = "idle" | "thinking" | "awaiting_approval" | "executing
 
 export interface PendingToolCall {
   id: string;
+  sessionId: string;
   name: string;
   argumentsPreview: string;
 }
 
 export const agentStatus = writable<AgentStatus>("idle");
-export const pendingToolCalls = writable<PendingToolCall[]>([
-  {
-    id: "draft-shell-call",
-    name: "shell",
-    argumentsPreview: "bun install"
-  }
-]);
+export const pendingToolCalls = writable<PendingToolCall[]>([]);

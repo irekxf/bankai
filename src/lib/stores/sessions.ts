@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { createSession, listSessions } from "../tauri/commands";
 
 export interface SessionSummary {
   id: string;
@@ -6,13 +7,19 @@ export interface SessionSummary {
   updatedAt: string;
 }
 
-const initialSessions: SessionSummary[] = [
-  {
-    id: "local-draft",
-    title: "ChatGPT agent bootstrap",
-    updatedAt: new Date().toISOString()
-  }
-];
+const initialSessions: SessionSummary[] = [];
 
 export const sessions = writable<SessionSummary[]>(initialSessions);
-export const currentSessionId = writable<string>(initialSessions[0].id);
+export const currentSessionId = writable<string>("");
+
+export async function refreshSessions(): Promise<void> {
+  const records = await listSessions();
+  sessions.set(records);
+  currentSessionId.update((current) => current || records[0]?.id || "");
+}
+
+export async function createLocalSession(title?: string): Promise<void> {
+  const created = await createSession(title);
+  await refreshSessions();
+  currentSessionId.set(created.id);
+}

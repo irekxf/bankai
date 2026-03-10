@@ -1,5 +1,52 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { getProviderConfig, saveProviderConfig } from "../../lib/tauri/commands";
   import { providerSettings } from "../../lib/stores/settings";
+
+  onMount(async () => {
+    try {
+      const config = await getProviderConfig();
+      providerSettings.update((current) => ({
+        ...current,
+        ...config,
+        apiKeyDraft: "",
+        saveState: "idle"
+      }));
+    } catch {
+      providerSettings.update((current) => ({ ...current, saveState: "error" }));
+    }
+  });
+
+  async function saveSettings() {
+    providerSettings.update((current) => ({ ...current, saveState: "saving" }));
+
+    try {
+      const snapshot = $providerSettings;
+      const config = await saveProviderConfig({
+        provider: snapshot.provider,
+        displayName: snapshot.displayName,
+        baseUrl: snapshot.baseUrl,
+        model: snapshot.model,
+        apiKey: snapshot.apiKeyDraft
+      });
+
+      providerSettings.update((current) => ({
+        ...current,
+        ...config,
+        apiKeyDraft: "",
+        saveState: "saved"
+      }));
+    } catch {
+      providerSettings.update((current) => ({ ...current, saveState: "error" }));
+    }
+  }
+
+  function handleSaveKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void saveSettings();
+    }
+  }
 </script>
 
 <section class="panel">
@@ -23,6 +70,38 @@
       <span>Model</span>
       <input bind:value={$providerSettings.model} />
     </label>
+  </div>
+
+  <label>
+    <span>API Key</span>
+    <input
+      bind:value={$providerSettings.apiKeyDraft}
+      autocomplete="off"
+      placeholder="sk-..."
+      type="password"
+    />
+  </label>
+
+  <div class="actions">
+    <small>
+      {#if $providerSettings.saveState === "saving"}
+        Сохраняю...
+      {:else if $providerSettings.saveState === "saved"}
+        Настройки сохранены.
+      {:else if $providerSettings.saveState === "error"}
+        Не удалось сохранить настройки.
+      {:else}
+        Храним API key в системном keyring.
+      {/if}
+    </small>
+    <md-filled-button
+      onclick={() => void saveSettings()}
+      onkeydown={handleSaveKeydown}
+      role="button"
+      tabindex="0"
+    >
+      Save
+    </md-filled-button>
   </div>
 
   <p class="hint">MVP идёт через OpenAI API key в keyring. OAuth-логин не закладываем.</p>
@@ -56,6 +135,13 @@
   label {
     display: grid;
     gap: 0.35rem;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
   }
 
   input {

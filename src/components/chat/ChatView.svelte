@@ -1,8 +1,74 @@
 <script lang="ts">
-  import { messages } from "../../lib/stores/messages";
+  import { onMount } from "svelte";
+  import { agentStatus, pendingToolCalls } from "../../lib/stores/agent";
+  import {
+    appendAssistantDelta,
+    appendMessage,
+    loadSessionMessages,
+    messages
+  } from "../../lib/stores/messages";
+  import { currentSessionId } from "../../lib/stores/sessions";
+  import {
+    onAgentError,
+    onAgentMessageDelta,
+    onAgentStatus,
+    onAgentToolCallRequest,
+    onAgentToolCallResult
+  } from "../../lib/tauri/events";
   import ApprovalPanel from "./ApprovalPanel.svelte";
   import ChatInput from "./ChatInput.svelte";
   import MessageBubble from "./MessageBubble.svelte";
+
+  $effect(() => {
+    if ($currentSessionId) {
+      void loadSessionMessages($currentSessionId);
+    }
+  });
+
+  onMount(() => {
+    const unlisteners: Array<() => void> = [];
+
+    void onAgentStatus((payload) => {
+      agentStatus.set(payload.status);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    void onAgentMessageDelta((payload) => {
+      appendAssistantDelta(payload.messageId, payload.delta);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    void onAgentError((payload) => {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: `Ошибка агента: ${payload.message}`,
+        createdAt: new Date().toISOString()
+      });
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    void onAgentToolCallRequest((payload) => {
+      pendingToolCalls.update((items) => [
+        ...items,
+        {
+          id: payload.id,
+          sessionId: payload.sessionId,
+          name: payload.toolName,
+          argumentsPreview: payload.argumentsJson
+        }
+      ]);
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    void onAgentToolCallResult((payload) => {
+      if (payload.sessionId === $currentSessionId) {
+        void loadSessionMessages(payload.sessionId);
+      }
+    }).then((unlisten) => unlisteners.push(unlisten));
+
+    return () => {
+      for (const unlisten of unlisteners) {
+        unlisten();
+      }
+    };
+  });
 </script>
 
 <section class="chat-shell">

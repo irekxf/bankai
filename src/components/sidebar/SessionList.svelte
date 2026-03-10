@@ -1,17 +1,50 @@
 <script lang="ts">
-  import { currentSessionId, sessions } from "../../lib/stores/sessions";
+  import { onMount } from "svelte";
+  import {
+    createLocalSession,
+    currentSessionId,
+    refreshSessions,
+    sessions
+  } from "../../lib/stores/sessions";
+
+  onMount(() => {
+    void (async () => {
+      await refreshSessions();
+      if ($sessions.length === 0) {
+        await createLocalSession("New chat");
+      }
+    })();
+  });
+
+  function handleNewSessionKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void createLocalSession("New chat");
+    }
+  }
 </script>
 
 <aside class="panel">
   <div class="header">
     <h2>Sessions</h2>
-    <span>Local</span>
+    <md-outlined-button
+      onclick={() => void createLocalSession("New chat")}
+      onkeydown={handleNewSessionKeydown}
+      role="button"
+      tabindex="0"
+    >
+      New
+    </md-outlined-button>
   </div>
+
+  {#if $sessions.length === 0}
+    <p class="empty">Пока нет сохранённых сессий.</p>
+  {/if}
 
   {#each $sessions as session}
     <button
       class:selected={session.id === $currentSessionId}
-      on:click={() => currentSessionId.set(session.id)}
+      onclick={() => currentSessionId.set(session.id)}
       type="button"
     >
       <strong>{session.title}</strong>
@@ -53,9 +86,13 @@
   }
 
   h2,
+  .empty,
   small,
-  strong,
-  span {
+  strong {
     margin: 0;
+  }
+
+  .empty {
+    color: var(--text-muted);
   }
 </style>

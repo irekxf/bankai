@@ -1,5 +1,26 @@
 <script lang="ts">
+  import { approveToolCall, rejectToolCall } from "../../lib/tauri/commands";
   import { pendingToolCalls } from "../../lib/stores/agent";
+
+  async function approve(callId: string) {
+    await approveToolCall(callId);
+    pendingToolCalls.update((items) => items.filter((item) => item.id !== callId));
+  }
+
+  async function reject(callId: string) {
+    await rejectToolCall(callId);
+    pendingToolCalls.update((items) => items.filter((item) => item.id !== callId));
+  }
+
+  function handleActionKeydown(
+    event: KeyboardEvent,
+    action: () => Promise<void>
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void action();
+    }
+  }
 </script>
 
 <section class="panel">
@@ -16,8 +37,24 @@
         <strong>{toolCall.name}</strong>
         <code>{toolCall.argumentsPreview}</code>
         <div class="actions">
-          <md-filled-button>Approve</md-filled-button>
-          <md-outlined-button>Reject</md-outlined-button>
+          <md-filled-button
+            onclick={() => void approve(toolCall.id)}
+            onkeydown={(event: KeyboardEvent) =>
+              handleActionKeydown(event, () => approve(toolCall.id))}
+            role="button"
+            tabindex="0"
+          >
+            Approve
+          </md-filled-button>
+          <md-outlined-button
+            onclick={() => void reject(toolCall.id)}
+            onkeydown={(event: KeyboardEvent) =>
+              handleActionKeydown(event, () => reject(toolCall.id))}
+            role="button"
+            tabindex="0"
+          >
+            Reject
+          </md-outlined-button>
         </div>
       </article>
     {/each}
