@@ -4,39 +4,45 @@ Last updated: 2026-03-10
 
 ## Best Next Task
 
-Stabilize provider and auth UX.
+Start Task B: add a tool registry and tool toggles.
 
-## Why This First
+## Why This Next
 
-- It is the first user-facing entry path.
-- The current repository already supports both OAuth and API key flows, but the UX still needs alignment.
-- This work is upstream of model selection and send-message reliability.
+- The auth/provider path is now in a much better place and passes frontend/Rust checks.
+- Tools are still hardcoded as always enabled, which blocks a core product capability.
+- This is the next roadmap item after auth UX stabilization.
 
 ## Start Here
 
 Read these files first:
 
 - [docs/tasks/BACKLOG.md](../tasks/BACKLOG.md)
-- [src/components/settings/ProviderConfig.svelte](../../src/components/settings/ProviderConfig.svelte)
-- [src/components/settings/OAuthOnboarding.svelte](../../src/components/settings/OAuthOnboarding.svelte)
-- [src/lib/stores/auth.ts](../../src/lib/stores/auth.ts)
-- [src/lib/stores/settings.ts](../../src/lib/stores/settings.ts)
-- [src-tauri/src/settings.rs](../../src-tauri/src/settings.rs)
+- [src-tauri/src/tools/mod.rs](../../src-tauri/src/tools/mod.rs)
+- [src-tauri/src/providers/openai.rs](../../src-tauri/src/providers/openai.rs)
+- [src-tauri/src/db/mod.rs](../../src-tauri/src/db/mod.rs)
 - [src-tauri/src/ipc/commands.rs](../../src-tauri/src/ipc/commands.rs)
+- [src/lib/tauri/commands.ts](../../src/lib/tauri/commands.ts)
+- [src/lib/stores/settings.ts](../../src/lib/stores/settings.ts)
+
+## Current Focus
+
+- define a backend tool registry
+- persist enabled/disabled state
+- expose toggles in the frontend
+- make OpenAI tool definitions respect enabled state
 
 ## Desired Outcome
 
-- One clear source of auth state in the UI.
-- No contradictory OAuth vs API key copy.
-- Explicit empty/error states when neither auth path is usable.
-- Model list and send flow behave predictably with the chosen auth mode.
+- Tools are listed from backend instead of being implicitly hardcoded.
+- The user can enable or disable tools in the UI.
+- Disabled tools are excluded from model requests.
+- Approval-required tools still keep their existing safety behavior.
 
 ## Watch Outs
 
-- Do not remove OAuth support.
-- Do not remove API key support.
-- Keep documentation aligned with `project.md`.
-- Be careful with simultaneous edits to shared files like `src-tauri/src/ipc/commands.rs`.
+- Do not weaken approval requirements for shell or filesystem writes.
+- Keep persistence simple enough for one PR.
+- Be careful with shared files like `src-tauri/src/ipc/commands.rs` and provider wiring.
 
 ## Before Ending The Next Session
 

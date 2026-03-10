@@ -13,6 +13,7 @@ The repository already contains a working vertical slice, but core systems are s
 - Svelte frontend renders the main app layout.
 - Chat UI, session list, provider settings, and OAuth onboarding exist.
 - OpenAI provider integration is wired through the Rust backend.
+- Provider/auth status now has a unified backend summary used by the frontend.
 - User messages can trigger a model response or a tool-call approval flow.
 - Pending tool calls are stored in SQLite.
 - Shell, filesystem, and browser tool foundations exist.
@@ -28,11 +29,11 @@ The repository already contains a working vertical slice, but core systems are s
 
 ## Current Priorities
 
-1. Stabilize provider and auth UX.
-2. Add tool registry and tool toggles.
-3. Persist richer message and tool-call data.
-4. Improve agent loop for true multi-step runs.
-5. Add baseline CI and PR workflow support.
+1. Add tool registry and tool toggles.
+2. Persist richer message and tool-call data.
+3. Improve agent loop for true multi-step runs.
+4. Add baseline CI and PR workflow support.
+5. Add richer desktop surfaces after core flows are stable.
 
 ## Important Constraints
 

@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getOAuthStatus, getProviderConfig, startOAuthLogin } from "../../lib/tauri/commands";
+  import {
+    getProviderStatus,
+    startOAuthLogin,
+    type ProviderStatusDto
+  } from "../../lib/tauri/commands";
   import { oauthLoginState, oauthStatus } from "../../lib/stores/auth";
   import { providerSettings } from "../../lib/stores/settings";
 
@@ -10,13 +14,42 @@
     await refreshState();
   });
 
-  function shouldShowOnboarding(
-    provider: { apiKeyStatus: "missing" | "configured"; preferredAuth: "auto" | "api_key" | "oauth" },
-    loggedIn: boolean
-  ) {
+  function syncProviderStatus(status: ProviderStatusDto) {
+    oauthStatus.set({
+      loggedIn: status.oauthLoggedIn,
+      authMode: status.oauthAuthMode,
+      accountId: status.oauthAccountId,
+      expiresAt: status.oauthExpiresAt
+    });
+
+    oauthLoginState.update((current) => {
+      if (status.oauthLoggedIn) {
+        return "connected";
+      }
+
+      return current === "connected" ? "idle" : current;
+    });
+
+    providerSettings.update((current) => ({
+      ...current,
+      provider: status.provider,
+      displayName: status.displayName,
+      baseUrl: status.baseUrl,
+      model: status.model,
+      preferredAuth: status.preferredAuth,
+      apiKeyStatus: status.apiKeyStatus,
+      activeAuth: status.activeAuth,
+      authReady: status.authReady,
+      authMessage: status.authMessage,
+      canLoadModels: status.canLoadModels,
+      canSendMessages: status.canSendMessages
+    }));
+  }
+
+  function shouldShowOnboarding(provider: ProviderStatusDto) {
     return (
       provider.preferredAuth === "auto" &&
-      !loggedIn &&
+      !provider.oauthLoggedIn &&
       provider.apiKeyStatus !== "configured" &&
       $oauthLoginState !== "dismissed"
     );
@@ -24,18 +57,9 @@
 
   async function refreshState() {
     try {
-      const [oauth, provider] = await Promise.all([getOAuthStatus(), getProviderConfig()]);
-      oauthStatus.set(oauth);
-      providerSettings.update((current) => ({
-        ...current,
-        ...provider
-      }));
-
-      shouldShow = shouldShowOnboarding(provider, oauth.loggedIn);
-
-      if (oauth.loggedIn) {
-        oauthLoginState.set("connected");
-      }
+      const status = await getProviderStatus();
+      syncProviderStatus(status);
+      shouldShow = shouldShowOnboarding(status);
     } catch {
       oauthLoginState.set("error");
       shouldShow = false;
@@ -46,14 +70,9 @@
     oauthLoginState.set("launching");
     try {
       const status = await startOAuthLogin();
-      const provider = await getProviderConfig();
-      oauthStatus.set(status);
-      providerSettings.update((current) => ({
-        ...current,
-        ...provider
-      }));
-      oauthLoginState.set(status.loggedIn ? "connected" : "error");
-      shouldShow = shouldShowOnboarding(provider, status.loggedIn);
+      syncProviderStatus(status);
+      oauthLoginState.set(status.oauthLoggedIn ? "connected" : "error");
+      shouldShow = shouldShowOnboarding(status);
     } catch {
       oauthLoginState.set("error");
       shouldShow = false;
@@ -83,11 +102,11 @@
 {#if shouldShow}
   <section class="overlay">
     <div class="card">
-      <p class="eyebrow">OpenAI Login</p>
-      <h2>Authorize through your browser or continue with API key</h2>
+      <p class="eyebrow">OpenAI Setup</p>
+      <h2>Connect OAuth or continue with an API key</h2>
       <p class="copy">
-        OAuth uses a localhost callback on <code>http://localhost:1455/auth/callback</code> to
-        complete the login flow.
+        Bankai supports both auth modes. OAuth uses a localhost callback on
+        <code>http://localhost:1455/auth/callback</code> to complete sign-in.
       </p>
 
       <div class="actions">
@@ -105,17 +124,17 @@
           role="button"
           tabindex="0"
         >
-          Use API key
+          Use API key instead
         </md-outlined-button>
       </div>
 
       <small>
         {#if $oauthLoginState === "launching"}
-          Browser flow started. Complete the login and return to Bankai.
+          Browser login started. Finish the OAuth flow and return to Bankai.
         {:else if $oauthLoginState === "error"}
-          OAuth login failed. You can retry or use an API key instead.
+          OAuth login failed. You can retry here or switch to the API key flow in Provider settings.
         {:else}
-          Both OAuth and API key are supported. Configure either to get started.
+          Pick either auth method to unlock model listing and message sending.
         {/if}
       </small>
     </div>

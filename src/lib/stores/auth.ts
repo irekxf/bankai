@@ -7,10 +7,10 @@ export interface OAuthStatus {
   expiresAt?: number;
 }
 
+export type OAuthLoginState = "idle" | "launching" | "connected" | "error" | "dismissed";
+
 export const oauthStatus = writable<OAuthStatus>({
   loggedIn: false
 });
 
-export const oauthLoginState = writable<
-  "idle" | "launching" | "connected" | "error" | "dismissed"
->("idle");
+export const oauthLoginState = writable<OAuthLoginState>("idle");

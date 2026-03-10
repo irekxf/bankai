@@ -48,6 +48,7 @@ pub fn run() {
             ipc::commands::start_oauth_login_command,
             ipc::commands::clear_oauth_session_command,
             ipc::commands::get_provider_config,
+            ipc::commands::get_provider_status_command,
             ipc::commands::list_provider_models,
             ipc::commands::save_provider_config_command
         ])

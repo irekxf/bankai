@@ -4,7 +4,10 @@ use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use crate::{error::AppError, oauth::get_oauth_bearer_token};
+use crate::{
+    error::AppError,
+    oauth::{get_oauth_bearer_token, get_oauth_status, OAuthStatus},
+};
 
 const OPENAI_SERVICE: &str = "bankai.openai";
 const OPENAI_ACCOUNT: &str = "default";
@@ -22,11 +25,39 @@ pub struct ProviderConfig {
     pub api_key_status: ApiKeyStatus,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ApiKeyStatus {
     Missing,
     Configured,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ActiveAuth {
+    ApiKey,
+    Oauth,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderStatus {
+    pub provider: String,
+    pub display_name: String,
+    pub base_url: String,
+    pub model: String,
+    pub preferred_auth: PreferredAuth,
+    pub api_key_status: ApiKeyStatus,
+    pub oauth_logged_in: bool,
+    pub oauth_auth_mode: Option<String>,
+    pub oauth_account_id: Option<String>,
+    pub oauth_expires_at: Option<u64>,
+    pub active_auth: ActiveAuth,
+    pub auth_ready: bool,
+    pub can_load_models: bool,
+    pub can_send_messages: bool,
+    pub auth_message: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -72,6 +103,12 @@ pub fn load_provider_config(app: &AppHandle) -> Result<ProviderConfig, AppError>
     let mut config = read_provider_file(app)?.unwrap_or_default();
     config.api_key_status = read_api_key_status()?;
     Ok(config)
+}
+
+pub async fn load_provider_status(app: &AppHandle) -> Result<ProviderStatus, AppError> {
+    let config = load_provider_config(app)?;
+    let oauth = get_oauth_status().await?;
+    Ok(build_provider_status(config, oauth))
 }
 
 pub fn load_openai_api_key() -> Result<String, AppError> {
@@ -194,6 +231,81 @@ fn read_api_key_status() -> Result<ApiKeyStatus, AppError> {
         Ok(_) => Ok(ApiKeyStatus::Missing),
         Err(keyring::Error::NoEntry) => Ok(ApiKeyStatus::Missing),
         Err(error) => Err(AppError::Message(error.to_string())),
+    }
+}
+
+fn build_provider_status(config: ProviderConfig, oauth: OAuthStatus) -> ProviderStatus {
+    let active_auth = resolve_active_auth(config.preferred_auth, config.api_key_status, oauth.logged_in);
+    let auth_ready = active_auth != ActiveAuth::None;
+
+    ProviderStatus {
+        provider: config.provider,
+        display_name: config.display_name,
+        base_url: config.base_url,
+        model: config.model,
+        preferred_auth: config.preferred_auth,
+        api_key_status: config.api_key_status,
+        oauth_logged_in: oauth.logged_in,
+        oauth_auth_mode: oauth.auth_mode,
+        oauth_account_id: oauth.account_id,
+        oauth_expires_at: oauth.expires_at,
+        active_auth,
+        auth_ready,
+        can_load_models: auth_ready,
+        can_send_messages: auth_ready,
+        auth_message: build_auth_message(config.preferred_auth, active_auth),
+    }
+}
+
+fn resolve_active_auth(
+    preferred_auth: PreferredAuth,
+    api_key_status: ApiKeyStatus,
+    oauth_logged_in: bool,
+) -> ActiveAuth {
+    match preferred_auth {
+        PreferredAuth::ApiKey => {
+            if api_key_status == ApiKeyStatus::Configured {
+                ActiveAuth::ApiKey
+            } else {
+                ActiveAuth::None
+            }
+        }
+        PreferredAuth::Oauth => {
+            if oauth_logged_in {
+                ActiveAuth::Oauth
+            } else {
+                ActiveAuth::None
+            }
+        }
+        PreferredAuth::Auto => {
+            if api_key_status == ApiKeyStatus::Configured {
+                ActiveAuth::ApiKey
+            } else if oauth_logged_in {
+                ActiveAuth::Oauth
+            } else {
+                ActiveAuth::None
+            }
+        }
+    }
+}
+
+fn build_auth_message(preferred_auth: PreferredAuth, active_auth: ActiveAuth) -> String {
+    match active_auth {
+        ActiveAuth::ApiKey => {
+            "Requests will use the saved API key from the system keyring.".to_string()
+        }
+        ActiveAuth::Oauth => {
+            "Requests will use the current OAuth session and refresh it when possible.".to_string()
+        }
+        ActiveAuth::None => match preferred_auth {
+            PreferredAuth::ApiKey => {
+                "Save an API key to enable model listing and message sending.".to_string()
+            }
+            PreferredAuth::Oauth => {
+                "Connect OAuth to enable model listing and message sending.".to_string()
+            }
+            PreferredAuth::Auto => "Choose either OAuth or API key. Until one is configured, the provider cannot load models or send requests.".to_string(),
+        },
     }
 }
 

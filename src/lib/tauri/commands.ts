@@ -28,6 +28,18 @@ export interface ProviderConfigDto {
   apiKeyStatus: "missing" | "configured";
 }
 
+export interface ProviderStatusDto extends ProviderConfigDto {
+  oauthLoggedIn: boolean;
+  oauthAuthMode?: string;
+  oauthAccountId?: string;
+  oauthExpiresAt?: number;
+  activeAuth: "api_key" | "oauth" | "none";
+  authReady: boolean;
+  canLoadModels: boolean;
+  canSendMessages: boolean;
+  authMessage: string;
+}
+
 export interface PendingToolCallDto {
   id: string;
   sessionId: string;
@@ -81,12 +93,12 @@ export async function getOAuthStatus(): Promise<OAuthStatusDto> {
   return invoke<OAuthStatusDto>("get_oauth_status_command");
 }
 
-export async function startOAuthLogin(): Promise<OAuthStatusDto> {
-  return invoke<OAuthStatusDto>("start_oauth_login_command");
+export async function startOAuthLogin(): Promise<ProviderStatusDto> {
+  return invoke<ProviderStatusDto>("start_oauth_login_command");
 }
 
-export async function clearOAuthSession(): Promise<void> {
-  return invoke("clear_oauth_session_command");
+export async function clearOAuthSession(): Promise<ProviderStatusDto> {
+  return invoke<ProviderStatusDto>("clear_oauth_session_command");
 }
 
 export async function approveToolCall(callId: string): Promise<void> {
@@ -101,12 +113,16 @@ export async function getProviderConfig(): Promise<ProviderConfigDto> {
   return invoke<ProviderConfigDto>("get_provider_config");
 }
 
+export async function getProviderStatus(): Promise<ProviderStatusDto> {
+  return invoke<ProviderStatusDto>("get_provider_status_command");
+}
+
 export async function listProviderModels(): Promise<string[]> {
   return invoke<string[]>("list_provider_models");
 }
 
 export async function saveProviderConfig(
   payload: SaveProviderConfigPayload
-): Promise<ProviderConfigDto> {
-  return invoke<ProviderConfigDto>("save_provider_config_command", { config: payload });
+): Promise<ProviderStatusDto> {
+  return invoke<ProviderStatusDto>("save_provider_config_command", { config: payload });
 }

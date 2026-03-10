@@ -13,7 +13,7 @@ Last updated: 2026-03-10
 
 | ID | Task | Status | Why it matters | Main areas |
 | --- | --- | --- | --- | --- |
-| A | Stabilize provider and auth UX | todo | Make auth state understandable and reliable | `src/components/settings`, `src/lib/stores`, `src-tauri/src/settings.rs`, `src-tauri/src/ipc/commands.rs` |
+| A | Stabilize provider and auth UX | done | Make auth state understandable and reliable | `src/components/settings`, `src/lib/stores`, `src-tauri/src/settings.rs`, `src-tauri/src/ipc/commands.rs` |
 | B | Add tool registry and tool toggles | todo | Stop treating all tools as always enabled | `src-tauri/src/tools`, `src-tauri/src/db`, frontend settings UI |
 | C | Persist richer message and tool-call data | todo | Make session replay and tool history reliable | `src-tauri/src/db`, DTOs, chat rendering |
 | D | Improve agent loop for real multi-step runs | todo | Support sequential tool usage before final answer | `src-tauri/src/agent/loop.rs`, provider integration |
@@ -24,6 +24,7 @@ Last updated: 2026-03-10
 ### A. Stabilize provider and auth UX
 
 - Goal: align OAuth and API key flows into one consistent experience.
+- Outcome: frontend and backend now share a unified provider-auth summary with clearer readiness and failure states.
 - Deliverable: clear active auth mode, failure states, and usable model selection.
 - Dependencies: none.
 

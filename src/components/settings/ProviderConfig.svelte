@@ -2,16 +2,18 @@
   import { onMount } from "svelte";
   import {
     clearOAuthSession,
-    getOAuthStatus,
-    getProviderConfig,
+    getProviderStatus,
     listProviderModels,
     saveProviderConfig,
-    startOAuthLogin
+    startOAuthLogin,
+    type ProviderStatusDto
   } from "../../lib/tauri/commands";
   import { oauthLoginState, oauthStatus } from "../../lib/stores/auth";
   import { providerSettings } from "../../lib/stores/settings";
 
   type PresetKey = "default" | "fast" | "reasoning" | "coding";
+  type EffectiveAuthMode = "api_key" | "oauth" | "none";
+
   const presetDescriptions: Record<PresetKey, string> = {
     default: "Balanced general model for everyday chat and agent tasks.",
     fast: "Lower latency pick for quick iterations and lightweight tasks.",
@@ -21,22 +23,183 @@
 
   onMount(async () => {
     try {
-      const [config, oauth] = await Promise.all([getProviderConfig(), getOAuthStatus()]);
+      const status = await getProviderStatus();
+      syncProviderStatus(status, {
+        clearApiKeyDraft: true,
+        saveState: "idle",
+        saveError: null
+      });
+
+      if (status.canLoadModels) {
+        void refreshModels();
+      } else {
+        resetModelsState();
+      }
+    } catch (error) {
       providerSettings.update((current) => ({
         ...current,
-        ...config,
-        apiKeyDraft: "",
-        saveState: "idle"
+        saveState: "error",
+        saveError: getErrorMessage(error, "Failed to load provider settings.")
       }));
-      oauthStatus.set(oauth);
-      void refreshModels();
-    } catch {
-      providerSettings.update((current) => ({ ...current, saveState: "error" }));
     }
   });
 
+  function getErrorMessage(error: unknown, fallback: string): string {
+    if (typeof error === "string" && error.trim().length > 0) {
+      return error;
+    }
+
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message;
+    }
+
+    return fallback;
+  }
+
+  function syncProviderStatus(
+    status: ProviderStatusDto,
+    options: {
+      clearApiKeyDraft?: boolean;
+      saveState?: "idle" | "saving" | "saved" | "error";
+      saveError?: string | null;
+    } = {}
+  ) {
+    oauthStatus.set({
+      loggedIn: status.oauthLoggedIn,
+      authMode: status.oauthAuthMode,
+      accountId: status.oauthAccountId,
+      expiresAt: status.oauthExpiresAt
+    });
+
+    oauthLoginState.update((current) => {
+      if (status.oauthLoggedIn) {
+        return "connected";
+      }
+
+      return current === "connected" ? "idle" : current;
+    });
+
+    providerSettings.update((current) => ({
+      ...current,
+      provider: status.provider,
+      displayName: status.displayName,
+      baseUrl: status.baseUrl,
+      model: status.model,
+      preferredAuth: status.preferredAuth,
+      apiKeyStatus: status.apiKeyStatus,
+      activeAuth: status.activeAuth,
+      authReady: status.authReady,
+      authMessage: status.authMessage,
+      canLoadModels: status.canLoadModels,
+      canSendMessages: status.canSendMessages,
+      apiKeyDraft: options.clearApiKeyDraft ? "" : current.apiKeyDraft,
+      saveState: options.saveState !== undefined ? options.saveState : current.saveState,
+      saveError: options.saveError !== undefined ? options.saveError : current.saveError
+    }));
+  }
+
+  function hasApiKeyConfigured(): boolean {
+    return $providerSettings.apiKeyStatus === "configured";
+  }
+
+  function hasOAuthSession(): boolean {
+    return $oauthStatus.loggedIn;
+  }
+
+  function effectiveAuthMode(): EffectiveAuthMode {
+    return $providerSettings.activeAuth;
+  }
+
+  function activeAuthLabel(): string {
+    const mode = effectiveAuthMode();
+
+    if (mode === "api_key") {
+      return $providerSettings.preferredAuth === "auto" ? "Auto -> API key" : "API key";
+    }
+
+    if (mode === "oauth") {
+      return $providerSettings.preferredAuth === "auto" ? "Auto -> OAuth" : "OAuth";
+    }
+
+    if ($providerSettings.preferredAuth === "api_key") {
+      return "API key required";
+    }
+
+    if ($providerSettings.preferredAuth === "oauth") {
+      return "OAuth required";
+    }
+
+    return "Not configured";
+  }
+
+  function authReadinessLabel(): string {
+    return $providerSettings.authReady ? "Ready" : "Needs setup";
+  }
+
+  function authSupportCopy(): string {
+    return $providerSettings.authMessage;
+  }
+
+  function modelsHelperText(): string {
+    if ($providerSettings.modelsState === "loading") {
+      return "Loading available chat models...";
+    }
+
+    if ($providerSettings.modelsState === "loaded") {
+      return `Loaded ${$providerSettings.availableModels.length} models for the current auth state.`;
+    }
+
+    if ($providerSettings.modelsState === "error") {
+      return $providerSettings.modelsError ?? "Failed to load models. You can still type a model name manually.";
+    }
+
+    if (effectiveAuthMode() === "none") {
+      return "Configure OAuth or save an API key before loading models.";
+    }
+
+    return "Load available models using the currently active auth method.";
+  }
+
+  function saveHelperText(): string {
+    if ($providerSettings.saveState === "saving") {
+      return "Saving provider settings...";
+    }
+
+    if ($providerSettings.saveState === "saved") {
+      return "Provider settings saved.";
+    }
+
+    if ($providerSettings.saveState === "error") {
+      return $providerSettings.saveError ?? "Failed to save provider settings.";
+    }
+
+    return "API keys are stored in the system keyring. OAuth sessions stay separate.";
+  }
+
+  function resetModelsState() {
+    providerSettings.update((current) => ({
+      ...current,
+      availableModels: [],
+      recommendedDefaultModel: undefined,
+      recommendedFastModel: undefined,
+      recommendedReasoningModel: undefined,
+      recommendedCodingModel: undefined,
+      modelsState: "idle",
+      modelsError: null
+    }));
+  }
+
   async function refreshModels() {
-    providerSettings.update((current) => ({ ...current, modelsState: "loading" }));
+    if (!$providerSettings.canLoadModels) {
+      resetModelsState();
+      return;
+    }
+
+    providerSettings.update((current) => ({
+      ...current,
+      modelsState: "loading",
+      modelsError: null
+    }));
 
     try {
       const models = await listProviderModels();
@@ -48,9 +211,10 @@
         recommendedFastModel: recommendations.fast,
         recommendedReasoningModel: recommendations.reasoning,
         recommendedCodingModel: recommendations.coding,
-        modelsState: "loaded"
+        modelsState: "loaded",
+        modelsError: null
       }));
-    } catch {
+    } catch (error) {
       providerSettings.update((current) => ({
         ...current,
         availableModels: [],
@@ -58,17 +222,22 @@
         recommendedFastModel: undefined,
         recommendedReasoningModel: undefined,
         recommendedCodingModel: undefined,
-        modelsState: "error"
+        modelsState: "error",
+        modelsError: getErrorMessage(error, "Failed to load models. Check the selected auth method.")
       }));
     }
   }
 
   async function saveSettings() {
-    providerSettings.update((current) => ({ ...current, saveState: "saving" }));
+    providerSettings.update((current) => ({
+      ...current,
+      saveState: "saving",
+      saveError: null
+    }));
 
     try {
       const snapshot = $providerSettings;
-      const config = await saveProviderConfig({
+      const status = await saveProviderConfig({
         provider: snapshot.provider,
         displayName: snapshot.displayName,
         baseUrl: snapshot.baseUrl,
@@ -77,14 +246,23 @@
         apiKey: snapshot.apiKeyDraft
       });
 
+      syncProviderStatus(status, {
+        clearApiKeyDraft: true,
+        saveState: "saved",
+        saveError: null
+      });
+
+      if (status.canLoadModels) {
+        void refreshModels();
+      } else {
+        resetModelsState();
+      }
+    } catch (error) {
       providerSettings.update((current) => ({
         ...current,
-        ...config,
-        apiKeyDraft: "",
-        saveState: "saved"
+        saveState: "error",
+        saveError: getErrorMessage(error, "Failed to save provider settings.")
       }));
-    } catch {
-      providerSettings.update((current) => ({ ...current, saveState: "error" }));
     }
   }
 
@@ -93,22 +271,6 @@
       event.preventDefault();
       void saveSettings();
     }
-  }
-
-  function currentAuthLabel(): string {
-    if ($providerSettings.preferredAuth === "api_key") {
-      return $providerSettings.apiKeyStatus === "configured" ? "API key" : "API key (not set)";
-    }
-    if ($providerSettings.preferredAuth === "oauth") {
-      return $oauthStatus.loggedIn ? "OAuth" : "OAuth (not connected)";
-    }
-    if ($providerSettings.apiKeyStatus === "configured") {
-      return "Auto → API key";
-    }
-    if ($oauthStatus.loggedIn) {
-      return "Auto → OAuth";
-    }
-    return "Not configured";
   }
 
   function formattedExpiry(): string {
@@ -124,35 +286,46 @@
 
     try {
       const status = await startOAuthLogin();
-      const config = await getProviderConfig();
-      oauthStatus.set(status);
-      oauthLoginState.set(status.loggedIn ? "connected" : "error");
+      syncProviderStatus(status, {
+        saveState: "idle",
+        saveError: null
+      });
+
+      if (status.canLoadModels) {
+        void refreshModels();
+      } else {
+        resetModelsState();
+      }
+    } catch (error) {
+      oauthLoginState.set("error");
       providerSettings.update((current) => ({
         ...current,
-        ...config
+        saveState: "error",
+        saveError: getErrorMessage(error, "OAuth login failed.")
       }));
-      void refreshModels();
-    } catch {
-      oauthLoginState.set("error");
-      providerSettings.update((current) => ({ ...current, saveState: "error" }));
     }
   }
 
   async function disconnectOAuth() {
-    await clearOAuthSession();
-    oauthStatus.set({
-      loggedIn: false
-    });
-    providerSettings.update((current) => ({
-      ...current,
-      availableModels: [],
-      recommendedDefaultModel: undefined,
-      recommendedFastModel: undefined,
-      recommendedReasoningModel: undefined,
-      recommendedCodingModel: undefined,
-      modelsState: "idle",
-      preferredAuth: current.apiKeyStatus === "configured" ? "api_key" : "auto"
-    }));
+    try {
+      const status = await clearOAuthSession();
+      syncProviderStatus(status, {
+        saveState: "idle",
+        saveError: null
+      });
+
+      if (status.canLoadModels) {
+        void refreshModels();
+      } else {
+        resetModelsState();
+      }
+    } catch (error) {
+      providerSettings.update((current) => ({
+        ...current,
+        saveState: "error",
+        saveError: getErrorMessage(error, "Failed to disconnect OAuth.")
+      }));
+    }
   }
 
   function handleDisconnectKeydown(event: KeyboardEvent) {
@@ -237,12 +410,15 @@
       <p class="subtitle">Current model: <strong>{$providerSettings.model}</strong></p>
     </div>
     <div class="summary">
-      <span class="badge primary">{currentAuthLabel()}</span>
-      <span class:ready={$providerSettings.apiKeyStatus === "configured"} class="badge">
+      <span class="badge primary">{activeAuthLabel()}</span>
+      <span class:ready={hasApiKeyConfigured()} class="badge">
         API key: {$providerSettings.apiKeyStatus}
       </span>
-      <span class:ready={$oauthStatus.loggedIn} class="badge">
-        OAuth: {$oauthStatus.loggedIn ? "connected" : "missing"}
+      <span class:ready={hasOAuthSession()} class="badge">
+        OAuth: {hasOAuthSession() ? "connected" : "missing"}
+      </span>
+      <span class:ready={effectiveAuthMode() !== "none"} class="badge">
+        Provider: {authReadinessLabel()}
       </span>
     </div>
   </div>
@@ -270,6 +446,11 @@
     </article>
   </div>
 
+  <div class="auth-callout" class:warning={effectiveAuthMode() === "none"}>
+    <strong>{authReadinessLabel()}</strong>
+    <small>{authSupportCopy()}</small>
+  </div>
+
   <div class="grid">
     <label>
       <span>Base URL</span>
@@ -291,24 +472,15 @@
   </div>
 
   <div class="models-row">
-    <small>
-      {#if $providerSettings.modelsState === "loading"}
-        Загружаю список моделей...
-      {:else if $providerSettings.modelsState === "loaded"}
-        Найдено чат-моделей: {$providerSettings.availableModels.length}
-      {:else if $providerSettings.modelsState === "error"}
-        Не удалось загрузить список моделей. Можно ввести модель вручную.
-      {:else}
-        Можно загрузить список моделей с текущими настройками авторизации.
-      {/if}
-    </small>
+    <small>{modelsHelperText()}</small>
     <md-outlined-button
+      disabled={$providerSettings.modelsState === "loading" || effectiveAuthMode() === "none"}
       onclick={() => void refreshModels()}
       onkeydown={handleRefreshModelsKeydown}
       role="button"
       tabindex="0"
     >
-      Refresh models
+      {$providerSettings.modelsState === "loading" ? "Loading..." : "Refresh models"}
     </md-outlined-button>
   </div>
 
@@ -382,49 +554,40 @@
   </label>
 
   <div class="actions">
-    <small>
-      {#if $providerSettings.saveState === "saving"}
-        Сохраняю...
-      {:else if $providerSettings.saveState === "saved"}
-        Настройки сохранены.
-      {:else if $providerSettings.saveState === "error"}
-        Не удалось сохранить настройки.
-      {:else}
-        Храним API key в системном keyring.
-      {/if}
-    </small>
+    <small>{saveHelperText()}</small>
     <md-filled-button
+      disabled={$providerSettings.saveState === "saving"}
       onclick={() => void saveSettings()}
       onkeydown={handleSaveKeydown}
       role="button"
       tabindex="0"
     >
-      Save
+      {$providerSettings.saveState === "saving" ? "Saving..." : "Save"}
     </md-filled-button>
   </div>
 
   <div class="oauth-panel">
     <div class="oauth-meta">
       <small>
-        {#if $oauthStatus.loggedIn}
+        {#if hasOAuthSession()}
           OAuth session is stored in the system keyring and refreshed automatically.
         {:else if $providerSettings.preferredAuth === "oauth"}
-          OAuth is selected as preferred auth, but no active session found. Connect below.
-        {:else if $providerSettings.preferredAuth === "api_key" && $providerSettings.apiKeyStatus !== "configured"}
-          API key is selected but not saved. Enter your key above and save.
-        {:else if $providerSettings.apiKeyStatus !== "configured"}
-          No auth configured. Enter an API key or connect via OAuth to use the provider.
+          OAuth is selected as the preferred auth mode, but no active session is available yet.
+        {:else if $providerSettings.preferredAuth === "api_key" && !hasApiKeyConfigured()}
+          API key is selected as the preferred auth mode, but no saved key is available yet.
+        {:else if effectiveAuthMode() === "none"}
+          Neither OAuth nor API key is ready. Configure one method to start using the provider.
         {:else}
-          OAuth is an additional auth option. API key is already configured.
+          OAuth remains available as an alternate auth method.
         {/if}
       </small>
-      {#if $oauthStatus.loggedIn}
+      {#if hasOAuthSession()}
         <small>Expires: {formattedExpiry()}</small>
       {/if}
     </div>
 
     <div class="oauth-buttons">
-      {#if !$oauthStatus.loggedIn}
+      {#if !hasOAuthSession()}
         <md-outlined-button
           onclick={() => void connectOAuth()}
           onkeydown={handleConnectKeydown}
@@ -435,7 +598,7 @@
         </md-outlined-button>
       {/if}
 
-      {#if $oauthStatus.loggedIn}
+      {#if hasOAuthSession()}
         <md-outlined-button
           onclick={() => void disconnectOAuth()}
           onkeydown={handleDisconnectKeydown}
@@ -483,13 +646,19 @@
     gap: 0.75rem;
   }
 
-  .overview article {
+  .overview article,
+  .auth-callout {
     display: grid;
     gap: 0.3rem;
     padding: 0.8rem 0.9rem;
     border-radius: 16px;
     border: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.04);
+  }
+
+  .auth-callout.warning {
+    border-color: rgba(255, 195, 113, 0.55);
+    background: rgba(255, 195, 113, 0.08);
   }
 
   .grid {
@@ -552,9 +721,6 @@
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-  }
-
-  .oauth-panel {
     align-items: center;
   }
 
@@ -569,14 +735,7 @@
     align-items: center;
   }
 
-  input {
-    border-radius: 14px;
-    border: 1px solid var(--border);
-    background: rgba(7, 11, 26, 0.8);
-    color: inherit;
-    padding: 0.7rem 0.85rem;
-  }
-
+  input,
   select {
     border-radius: 14px;
     border: 1px solid var(--border);
@@ -586,15 +745,15 @@
   }
 
   .eyebrow,
-  .hint,
   h3,
   p,
-  span {
+  span,
+  strong,
+  small {
     margin: 0;
   }
 
-  .eyebrow,
-  .hint {
+  .eyebrow {
     color: var(--text-muted);
   }
 
@@ -635,14 +794,12 @@
       grid-template-columns: 1fr;
     }
 
-    .oauth-panel {
-      align-items: start;
-      flex-direction: column;
-    }
-
-    .models-row {
+    .oauth-panel,
+    .models-row,
+    .actions {
       align-items: start;
       flex-direction: column;
     }
   }
 </style>
+

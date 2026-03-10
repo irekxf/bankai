@@ -16,8 +16,8 @@ use crate::{
     oauth::{clear_oauth_session, get_oauth_status, start_oauth_login, OAuthStatus},
     providers::openai::{continue_after_function_output, list_models as list_openai_models},
     settings::{
-        load_provider_config, save_provider_config, set_preferred_auth, PreferredAuth,
-        ProviderConfig, SaveProviderConfigInput,
+        load_provider_config, load_provider_status, save_provider_config, set_preferred_auth,
+        PreferredAuth, ProviderConfig, ProviderStatus, SaveProviderConfigInput,
     },
     state::AppState,
     tools::browser::{execute_browser, BrowserRequest},
@@ -158,6 +158,13 @@ pub async fn get_provider_config(app: AppHandle) -> Result<ProviderConfig, Strin
 }
 
 #[tauri::command]
+pub async fn get_provider_status_command(app: AppHandle) -> Result<ProviderStatus, String> {
+    load_provider_status(&app)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn list_provider_models(app: AppHandle) -> Result<Vec<String>, String> {
     let config = load_provider_config(&app).map_err(|error| error.to_string())?;
     list_openai_models(&config)
@@ -169,8 +176,11 @@ pub async fn list_provider_models(app: AppHandle) -> Result<Vec<String>, String>
 pub async fn save_provider_config_command(
     app: AppHandle,
     config: SaveProviderConfigInput,
-) -> Result<ProviderConfig, String> {
-    save_provider_config(&app, config).map_err(Into::into)
+) -> Result<ProviderStatus, String> {
+    save_provider_config(&app, config).map_err(|error| error.to_string())?;
+    load_provider_status(&app)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -179,19 +189,23 @@ pub async fn get_oauth_status_command() -> Result<OAuthStatus, String> {
 }
 
 #[tauri::command]
-pub async fn start_oauth_login_command(app: AppHandle) -> Result<OAuthStatus, String> {
-    let status = start_oauth_login()
+pub async fn start_oauth_login_command(app: AppHandle) -> Result<ProviderStatus, String> {
+    start_oauth_login()
         .await
         .map_err(|error| error.to_string())?;
     set_preferred_auth(&app, PreferredAuth::Oauth).map_err(|error| error.to_string())?;
-    Ok(status)
+    load_provider_status(&app)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub async fn clear_oauth_session_command(app: AppHandle) -> Result<(), String> {
+pub async fn clear_oauth_session_command(app: AppHandle) -> Result<ProviderStatus, String> {
     clear_oauth_session().map_err(|error| error.to_string())?;
-    let _ = set_preferred_auth(&app, PreferredAuth::Auto);
-    Ok(())
+    set_preferred_auth(&app, PreferredAuth::Auto).map_err(|error| error.to_string())?;
+    load_provider_status(&app)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 async fn run_approved_tool(
