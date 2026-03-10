@@ -20,6 +20,7 @@ use crate::{
         ProviderConfig, SaveProviderConfigInput,
     },
     state::AppState,
+    tools::browser::{execute_browser, BrowserRequest},
     tools::filesystem::{execute_filesystem, FilesystemRequest},
     tools::shell::execute_shell,
 };
@@ -214,6 +215,13 @@ async fn run_approved_tool(
             let request: FilesystemRequest =
                 serde_json::from_value(payload).map_err(|error| error.to_string())?;
             execute_filesystem(&state.workspace_root, request)
+                .await
+                .map_err(|error| error.to_string())?
+        }
+        "browser" => {
+            let request: BrowserRequest =
+                serde_json::from_value(payload).map_err(|error| error.to_string())?;
+            execute_browser(request)
                 .await
                 .map_err(|error| error.to_string())?
         }

@@ -59,7 +59,7 @@ pub async fn create_tool_aware_response(
         .model(config.model.clone())
         .input(prompt)
         .parallel_tool_calls(false)
-        .tools(vec![shell_tool(), filesystem_tool()])
+        .tools(vec![shell_tool(), filesystem_tool(), browser_tool()])
         .build()
         .map_err(|error| AppError::Message(error.to_string()))?;
 
@@ -157,6 +157,32 @@ fn filesystem_tool() -> Tool {
                 }
             },
             "required": ["action", "path"],
+            "additionalProperties": false
+        })),
+        strict: Some(true),
+    })
+}
+
+fn browser_tool() -> Tool {
+    Tool::Function(FunctionTool {
+        name: "browser".to_string(),
+        description: Some(
+            "Open a web page in the user's browser or read a web page into text. Use when the user asks to open, navigate to, or inspect a site."
+                .to_string(),
+        ),
+        parameters: Some(json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["open_url", "read_page"]
+                },
+                "url": {
+                    "type": "string",
+                    "description": "http or https URL to open or read"
+                }
+            },
+            "required": ["action", "url"],
             "additionalProperties": false
         })),
         strict: Some(true),

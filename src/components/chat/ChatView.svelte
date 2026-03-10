@@ -31,6 +31,11 @@
         const path = payload.path ?? "";
         return `${action} ${path}`.trim();
       }
+      if (toolName === "browser") {
+        const action = payload.action ?? "unknown";
+        const url = payload.url ?? "";
+        return `${action} ${url}`.trim();
+      }
     } catch {
       return argumentsJson;
     }

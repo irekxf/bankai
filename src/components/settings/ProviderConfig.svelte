@@ -12,6 +12,12 @@
   import { providerSettings } from "../../lib/stores/settings";
 
   type PresetKey = "default" | "fast" | "reasoning" | "coding";
+  const presetDescriptions: Record<PresetKey, string> = {
+    default: "Balanced general model for everyday chat and agent tasks.",
+    fast: "Lower latency pick for quick iterations and lightweight tasks.",
+    reasoning: "Stronger planning and analysis, usually with higher latency.",
+    coding: "Best fit for code editing, shell usage, and repo work."
+  };
 
   onMount(async () => {
     try {
@@ -316,6 +322,7 @@
     >
       <span>Default</span>
       <small>{presetModel("default") ?? "Unavailable"}</small>
+      <small class="preset-copy">{presetDescriptions.default}</small>
     </button>
 
     <button
@@ -327,6 +334,7 @@
     >
       <span>Fast</span>
       <small>{presetModel("fast") ?? "Unavailable"}</small>
+      <small class="preset-copy">{presetDescriptions.fast}</small>
     </button>
 
     <button
@@ -338,6 +346,7 @@
     >
       <span>Reasoning</span>
       <small>{presetModel("reasoning") ?? "Unavailable"}</small>
+      <small class="preset-copy">{presetDescriptions.reasoning}</small>
     </button>
 
     <button
@@ -349,6 +358,7 @@
     >
       <span>Coding</span>
       <small>{presetModel("coding") ?? "Unavailable"}</small>
+      <small class="preset-copy">{presetDescriptions.coding}</small>
     </button>
   </div>
 
@@ -526,6 +536,11 @@
   .presets button.selected {
     border-color: var(--accent);
     background: rgba(120, 186, 255, 0.12);
+  }
+
+  .preset-copy {
+    color: var(--text-muted);
+    line-height: 1.35;
   }
 
   .presets button:disabled {
