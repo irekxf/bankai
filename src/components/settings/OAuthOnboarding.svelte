@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { getOAuthStatus, getProviderConfig, startOAuthLogin } from "../../lib/tauri/commands";
   import { oauthLoginState, oauthStatus } from "../../lib/stores/auth";
+  import { providerSettings } from "../../lib/stores/settings";
 
   let shouldShow = $state(false);
 
@@ -9,22 +10,35 @@
     await refreshState();
   });
 
+  function shouldShowOnboarding(
+    provider: { apiKeyStatus: "missing" | "configured"; preferredAuth: "auto" | "api_key" | "oauth" },
+    loggedIn: boolean
+  ) {
+    return (
+      provider.preferredAuth === "auto" &&
+      !loggedIn &&
+      provider.apiKeyStatus !== "configured" &&
+      $oauthLoginState !== "dismissed"
+    );
+  }
+
   async function refreshState() {
     try {
       const [oauth, provider] = await Promise.all([getOAuthStatus(), getProviderConfig()]);
       oauthStatus.set(oauth);
+      providerSettings.update((current) => ({
+        ...current,
+        ...provider
+      }));
 
-      shouldShow =
-        !$oauthStatus.loggedIn &&
-        provider.apiKeyStatus !== "configured" &&
-        $oauthLoginState !== "dismissed";
+      shouldShow = shouldShowOnboarding(provider, oauth.loggedIn);
 
-      if ($oauthStatus.loggedIn) {
+      if (oauth.loggedIn) {
         oauthLoginState.set("connected");
       }
     } catch {
       oauthLoginState.set("error");
-      shouldShow = true;
+      shouldShow = false;
     }
   }
 
@@ -32,11 +46,17 @@
     oauthLoginState.set("launching");
     try {
       const status = await startOAuthLogin();
+      const provider = await getProviderConfig();
       oauthStatus.set(status);
+      providerSettings.update((current) => ({
+        ...current,
+        ...provider
+      }));
       oauthLoginState.set(status.loggedIn ? "connected" : "error");
-      shouldShow = !status.loggedIn;
+      shouldShow = shouldShowOnboarding(provider, status.loggedIn);
     } catch {
       oauthLoginState.set("error");
+      shouldShow = false;
     }
   }
 

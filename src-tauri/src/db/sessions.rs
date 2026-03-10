@@ -12,7 +12,11 @@ pub struct SessionSummary {
     pub updated_at: String,
 }
 
-pub async fn ensure_session(pool: &SqlitePool, session_id: &str, title: &str) -> Result<(), AppError> {
+pub async fn ensure_session(
+    pool: &SqlitePool,
+    session_id: &str,
+    title: &str,
+) -> Result<(), AppError> {
     sqlx::query(
         r#"
         INSERT INTO sessions (id, title)
@@ -51,7 +55,10 @@ pub async fn list_sessions(pool: &SqlitePool) -> Result<Vec<SessionSummary>, App
     .map_err(|error| AppError::Message(error.to_string()))
 }
 
-pub async fn get_session(pool: &SqlitePool, session_id: &str) -> Result<Option<SessionSummary>, AppError> {
+pub async fn get_session(
+    pool: &SqlitePool,
+    session_id: &str,
+) -> Result<Option<SessionSummary>, AppError> {
     sqlx::query_as::<_, SessionSummary>(
         r#"
         SELECT id, COALESCE(title, 'Untitled session') AS title, updated_at
@@ -65,7 +72,11 @@ pub async fn get_session(pool: &SqlitePool, session_id: &str) -> Result<Option<S
     .map_err(|error| AppError::Message(error.to_string()))
 }
 
-pub async fn touch_session(pool: &SqlitePool, session_id: &str, title: Option<&str>) -> Result<(), AppError> {
+pub async fn touch_session(
+    pool: &SqlitePool,
+    session_id: &str,
+    title: Option<&str>,
+) -> Result<(), AppError> {
     sqlx::query(
         r#"
         UPDATE sessions

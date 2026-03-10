@@ -5,12 +5,20 @@ use crate::{
     agent::{approval::PendingApproval, r#loop::start_message_run},
     db::{
         messages::{create_message, MessageRecord},
-        sessions::{create_session as create_session_record, list_sessions as list_session_records, SessionSummary},
-        tool_calls::{list_pending_tool_calls as list_pending_tool_call_records, mark_tool_call_status},
+        sessions::{
+            create_session as create_session_record, list_sessions as list_session_records,
+            SessionSummary,
+        },
+        tool_calls::{
+            list_pending_tool_calls as list_pending_tool_call_records, mark_tool_call_status,
+        },
     },
-    oauth::{get_oauth_status, start_oauth_login, OAuthStatus},
-    providers::openai::continue_after_function_output,
-    settings::{load_provider_config, save_provider_config, ProviderConfig, SaveProviderConfigInput},
+    oauth::{clear_oauth_session, get_oauth_status, start_oauth_login, OAuthStatus},
+    providers::openai::{continue_after_function_output, list_models as list_openai_models},
+    settings::{
+        load_provider_config, save_provider_config, set_preferred_auth, PreferredAuth,
+        ProviderConfig, SaveProviderConfigInput,
+    },
     state::AppState,
     tools::filesystem::{execute_filesystem, FilesystemRequest},
     tools::shell::execute_shell,
@@ -123,14 +131,9 @@ pub async fn reject_tool_call(
         "Tool call rejected: {}",
         reason.unwrap_or_else(|| "no reason provided".to_string())
     );
-    create_message(
-        &state.db,
-        &pending.session_id,
-        "assistant",
-        &message,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+    create_message(&state.db, &pending.session_id, "assistant", &message)
+        .await
+        .map_err(|error| error.to_string())?;
     mark_tool_call_status(&state.db, &pending.id, "rejected")
         .await
         .map_err(|error| error.to_string())?;
@@ -154,6 +157,14 @@ pub async fn get_provider_config(app: AppHandle) -> Result<ProviderConfig, Strin
 }
 
 #[tauri::command]
+pub async fn list_provider_models(app: AppHandle) -> Result<Vec<String>, String> {
+    let config = load_provider_config(&app).map_err(|error| error.to_string())?;
+    list_openai_models(&config)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn save_provider_config_command(
     app: AppHandle,
     config: SaveProviderConfigInput,
@@ -167,8 +178,19 @@ pub async fn get_oauth_status_command() -> Result<OAuthStatus, String> {
 }
 
 #[tauri::command]
-pub async fn start_oauth_login_command() -> Result<OAuthStatus, String> {
-    start_oauth_login().await.map_err(Into::into)
+pub async fn start_oauth_login_command(app: AppHandle) -> Result<OAuthStatus, String> {
+    let status = start_oauth_login()
+        .await
+        .map_err(|error| error.to_string())?;
+    set_preferred_auth(&app, PreferredAuth::Oauth).map_err(|error| error.to_string())?;
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn clear_oauth_session_command(app: AppHandle) -> Result<(), String> {
+    clear_oauth_session().map_err(|error| error.to_string())?;
+    let _ = set_preferred_auth(&app, PreferredAuth::Auto);
+    Ok(())
 }
 
 async fn run_approved_tool(
@@ -184,7 +206,9 @@ async fn run_approved_tool(
                 .get("command")
                 .and_then(|value| value.as_str())
                 .ok_or_else(|| "Shell command payload is missing command".to_string())?;
-            execute_shell(command).await.map_err(|error| error.to_string())?
+            execute_shell(command)
+                .await
+                .map_err(|error| error.to_string())?
         }
         "filesystem" => {
             let request: FilesystemRequest =

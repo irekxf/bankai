@@ -1,5 +1,5 @@
-use std::{path::PathBuf, sync::Arc};
 use sqlx::SqlitePool;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
 use crate::agent::approval::ApprovalState;

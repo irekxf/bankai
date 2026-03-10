@@ -24,6 +24,7 @@ export interface ProviderConfigDto {
   displayName: string;
   baseUrl: string;
   model: string;
+  preferredAuth: "auto" | "api_key" | "oauth";
   apiKeyStatus: "missing" | "configured";
 }
 
@@ -43,11 +44,16 @@ export interface OAuthStatusDto {
   expiresAt?: number;
 }
 
+export interface ProviderModelsDto {
+  models: string[];
+}
+
 export interface SaveProviderConfigPayload {
   provider: "openai";
   displayName: string;
   baseUrl: string;
   model: string;
+  preferredAuth?: "auto" | "api_key" | "oauth";
   apiKey?: string;
 }
 
@@ -79,6 +85,10 @@ export async function startOAuthLogin(): Promise<OAuthStatusDto> {
   return invoke<OAuthStatusDto>("start_oauth_login_command");
 }
 
+export async function clearOAuthSession(): Promise<void> {
+  return invoke("clear_oauth_session_command");
+}
+
 export async function approveToolCall(callId: string): Promise<void> {
   await invoke("approve_tool_call", { callId });
 }
@@ -89,6 +99,10 @@ export async function rejectToolCall(callId: string, reason?: string): Promise<v
 
 export async function getProviderConfig(): Promise<ProviderConfigDto> {
   return invoke<ProviderConfigDto>("get_provider_config");
+}
+
+export async function listProviderModels(): Promise<string[]> {
+  return invoke<string[]>("list_provider_models");
 }
 
 export async function saveProviderConfig(

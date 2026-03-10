@@ -23,8 +23,8 @@ pub async fn execute_filesystem(
     match request {
         FilesystemRequest::ReadFile { path } => {
             let canonical = resolve_existing_path(workspace_root, &path)?;
-            let contents =
-                fs::read_to_string(&canonical).map_err(|error| AppError::Message(error.to_string()))?;
+            let contents = fs::read_to_string(&canonical)
+                .map_err(|error| AppError::Message(error.to_string()))?;
             Ok(contents)
         }
         FilesystemRequest::WriteFile { path, content } => {
@@ -38,10 +38,13 @@ pub async fn execute_filesystem(
         FilesystemRequest::ListDir { path } => {
             let canonical = resolve_existing_path(workspace_root, &path)?;
             let mut entries = Vec::new();
-            for entry in fs::read_dir(&canonical).map_err(|error| AppError::Message(error.to_string()))? {
+            for entry in
+                fs::read_dir(&canonical).map_err(|error| AppError::Message(error.to_string()))?
+            {
                 let entry = entry.map_err(|error| AppError::Message(error.to_string()))?;
-                let entry_type =
-                    entry.file_type().map_err(|error| AppError::Message(error.to_string()))?;
+                let entry_type = entry
+                    .file_type()
+                    .map_err(|error| AppError::Message(error.to_string()))?;
                 let label = if entry_type.is_dir() { "dir" } else { "file" };
                 entries.push(format!("{} {}", label, entry.file_name().to_string_lossy()));
             }

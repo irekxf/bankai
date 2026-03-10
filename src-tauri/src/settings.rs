@@ -17,6 +17,8 @@ pub struct ProviderConfig {
     pub display_name: String,
     pub base_url: String,
     pub model: String,
+    #[serde(default)]
+    pub preferred_auth: PreferredAuth,
     pub api_key_status: ApiKeyStatus,
 }
 
@@ -27,6 +29,20 @@ pub enum ApiKeyStatus {
     Configured,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PreferredAuth {
+    Auto,
+    ApiKey,
+    Oauth,
+}
+
+impl Default for PreferredAuth {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveProviderConfigInput {
@@ -34,6 +50,8 @@ pub struct SaveProviderConfigInput {
     pub display_name: String,
     pub base_url: String,
     pub model: String,
+    #[serde(default)]
+    pub preferred_auth: Option<PreferredAuth>,
     pub api_key: Option<String>,
 }
 
@@ -44,6 +62,7 @@ impl Default for ProviderConfig {
             display_name: "ChatGPT / OpenAI".to_string(),
             base_url: "https://api.openai.com/v1".to_string(),
             model: "gpt-4.1".to_string(),
+            preferred_auth: PreferredAuth::Auto,
             api_key_status: ApiKeyStatus::Missing,
         }
     }
@@ -73,31 +92,41 @@ pub fn load_openai_api_key() -> Result<String, AppError> {
     Ok(trimmed)
 }
 
-pub async fn load_openai_bearer_token() -> Result<String, AppError> {
-    if let Ok(api_key) = load_openai_api_key() {
-        if !api_key.trim().is_empty() {
-            return Ok(api_key);
+pub async fn load_openai_bearer_token(config: &ProviderConfig) -> Result<String, AppError> {
+    match config.preferred_auth {
+        PreferredAuth::ApiKey => load_openai_api_key(),
+        PreferredAuth::Oauth => get_oauth_bearer_token()
+            .await?
+            .ok_or_else(|| AppError::Message("OAuth session is not configured.".to_string())),
+        PreferredAuth::Auto => {
+            if let Ok(api_key) = load_openai_api_key() {
+                if !api_key.trim().is_empty() {
+                    return Ok(api_key);
+                }
+            }
+
+            if let Some(token) = get_oauth_bearer_token().await? {
+                return Ok(token);
+            }
+
+            Err(AppError::Message(
+                "No OpenAI API key or OAuth session is configured.".to_string(),
+            ))
         }
     }
-
-    if let Some(token) = get_oauth_bearer_token().await? {
-        return Ok(token);
-    }
-
-    Err(AppError::Message(
-        "No OpenAI API key or OAuth session is configured.".to_string(),
-    ))
 }
 
 pub fn save_provider_config(
     app: &AppHandle,
     input: SaveProviderConfigInput,
 ) -> Result<ProviderConfig, AppError> {
+    let existing = read_provider_file(app)?.unwrap_or_default();
     let config = ProviderConfig {
         provider: input.provider,
         display_name: input.display_name,
         base_url: input.base_url,
         model: input.model,
+        preferred_auth: input.preferred_auth.unwrap_or(existing.preferred_auth),
         api_key_status: ApiKeyStatus::Missing,
     };
 
@@ -112,6 +141,16 @@ pub fn save_provider_config(
         }
     }
 
+    load_provider_config(app)
+}
+
+pub fn set_preferred_auth(
+    app: &AppHandle,
+    preferred_auth: PreferredAuth,
+) -> Result<ProviderConfig, AppError> {
+    let mut config = read_provider_file(app)?.unwrap_or_default();
+    config.preferred_auth = preferred_auth;
+    write_provider_file(app, &config)?;
     load_provider_config(app)
 }
 
@@ -130,7 +169,8 @@ fn read_provider_file(app: &AppHandle) -> Result<Option<ProviderConfig>, AppErro
         return Ok(None);
     }
 
-    let contents = fs::read_to_string(path).map_err(|error| AppError::Message(error.to_string()))?;
+    let contents =
+        fs::read_to_string(path).map_err(|error| AppError::Message(error.to_string()))?;
     let mut config: ProviderConfig =
         serde_json::from_str(&contents).map_err(|error| AppError::Message(error.to_string()))?;
     config.api_key_status = ApiKeyStatus::Missing;
@@ -139,8 +179,8 @@ fn read_provider_file(app: &AppHandle) -> Result<Option<ProviderConfig>, AppErro
 
 fn write_provider_file(app: &AppHandle, config: &ProviderConfig) -> Result<(), AppError> {
     let path = provider_path(app)?;
-    let payload =
-        serde_json::to_string_pretty(config).map_err(|error| AppError::Message(error.to_string()))?;
+    let payload = serde_json::to_string_pretty(config)
+        .map_err(|error| AppError::Message(error.to_string()))?;
     fs::write(path, payload).map_err(|error| AppError::Message(error.to_string()))?;
     Ok(())
 }

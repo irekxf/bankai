@@ -12,7 +12,9 @@ use tauri::Manager;
 use tracing_subscriber::FmtSubscriber;
 
 pub fn run() {
-    let subscriber = FmtSubscriber::builder().with_max_level(tracing::Level::INFO).finish();
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(tracing::Level::INFO)
+        .finish();
     let _ = tracing::subscriber::set_global_default(subscriber);
 
     tauri::Builder::default()
@@ -20,8 +22,9 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let db = tauri::async_runtime::block_on(db::init(&app_handle))
                 .map_err(|error| error.to_string())?;
-            let pending_tool_calls = tauri::async_runtime::block_on(db::tool_calls::list_pending_tool_calls(&db))
-                .map_err(|error| error.to_string())?;
+            let pending_tool_calls =
+                tauri::async_runtime::block_on(db::tool_calls::list_pending_tool_calls(&db))
+                    .map_err(|error| error.to_string())?;
             let workspace_root = std::env::current_dir()
                 .map_err(|error| error.to_string())?
                 .canonicalize()
@@ -43,7 +46,9 @@ pub fn run() {
             ipc::commands::reject_tool_call,
             ipc::commands::get_oauth_status_command,
             ipc::commands::start_oauth_login_command,
+            ipc::commands::clear_oauth_session_command,
             ipc::commands::get_provider_config,
+            ipc::commands::list_provider_models,
             ipc::commands::save_provider_config_command
         ])
         .run(tauri::generate_context!())

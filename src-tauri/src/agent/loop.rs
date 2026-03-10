@@ -68,7 +68,10 @@ pub async fn start_message_run(
             create_message(&db, &session_id, "assistant", &full_response)
                 .await
                 .map_err(|error| error.to_string())?;
-            let title = text.lines().next().map(|line| line.chars().take(60).collect::<String>());
+            let title = text
+                .lines()
+                .next()
+                .map(|line| line.chars().take(60).collect::<String>());
             touch_session(&db, &session_id, title.as_deref())
                 .await
                 .map_err(|error| error.to_string())?;

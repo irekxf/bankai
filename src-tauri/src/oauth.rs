@@ -69,7 +69,7 @@ pub async fn start_oauth_login() -> Result<OAuthStatus, AppError> {
 }
 
 pub async fn get_oauth_status() -> Result<OAuthStatus, AppError> {
-    match load_oauth_session()? {
+    match ensure_fresh_session().await? {
         Some(session) => Ok(status_from_session(&session)),
         None => Ok(OAuthStatus {
             logged_in: false,
@@ -81,21 +81,16 @@ pub async fn get_oauth_status() -> Result<OAuthStatus, AppError> {
 }
 
 pub async fn get_oauth_bearer_token() -> Result<Option<String>, AppError> {
-    let Some(session) = load_oauth_session()? else {
+    let Some(session) = ensure_fresh_session().await? else {
         return Ok(None);
     };
 
-    if !is_expired(&session, 60) {
-        return Ok(Some(session.access_token));
-    }
-
-    let refreshed = refresh_session(&session).await?;
-    save_oauth_session(&refreshed)?;
-    Ok(Some(refreshed.access_token))
+    Ok(Some(session.access_token))
 }
 
 fn build_authorize_url(challenge: &str, state: &str) -> Result<String, AppError> {
-    let mut url = Url::parse(AUTHORIZE_URL).map_err(|error| AppError::Message(error.to_string()))?;
+    let mut url =
+        Url::parse(AUTHORIZE_URL).map_err(|error| AppError::Message(error.to_string()))?;
     url.query_pairs_mut()
         .append_pair("response_type", "code")
         .append_pair("client_id", CLIENT_ID)
@@ -113,8 +108,8 @@ fn build_authorize_url(challenge: &str, state: &str) -> Result<String, AppError>
 fn open_browser(url: &str) -> Result<(), AppError> {
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
-            .args(["/C", "start", "", url])
+        Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", url])
             .spawn()
             .map_err(|error| AppError::Message(error.to_string()))?;
         return Ok(());
@@ -206,7 +201,9 @@ fn build_session(token: TokenResponse, previous: Option<&OAuthSession>) -> OAuth
             .refresh_token
             .or_else(|| previous.map(|value| value.refresh_token.clone()))
             .unwrap_or_default(),
-        id_token: token.id_token.or_else(|| previous.and_then(|value| value.id_token.clone())),
+        id_token: token
+            .id_token
+            .or_else(|| previous.and_then(|value| value.id_token.clone())),
         account_id,
         expires_at: now.saturating_add(token.expires_in),
     }
@@ -222,8 +219,8 @@ fn status_from_session(session: &OAuthSession) -> OAuthStatus {
 }
 
 fn save_oauth_session(session: &OAuthSession) -> Result<(), AppError> {
-    let entry =
-        Entry::new(OAUTH_SERVICE, OAUTH_ACCOUNT).map_err(|error| AppError::Message(error.to_string()))?;
+    let entry = Entry::new(OAUTH_SERVICE, OAUTH_ACCOUNT)
+        .map_err(|error| AppError::Message(error.to_string()))?;
     let payload =
         serde_json::to_string(session).map_err(|error| AppError::Message(error.to_string()))?;
     entry
@@ -232,18 +229,42 @@ fn save_oauth_session(session: &OAuthSession) -> Result<(), AppError> {
     Ok(())
 }
 
+pub fn clear_oauth_session() -> Result<(), AppError> {
+    let entry = Entry::new(OAUTH_SERVICE, OAUTH_ACCOUNT)
+        .map_err(|error| AppError::Message(error.to_string()))?;
+
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(AppError::Message(error.to_string())),
+    }
+}
+
 fn load_oauth_session() -> Result<Option<OAuthSession>, AppError> {
-    let entry =
-        Entry::new(OAUTH_SERVICE, OAUTH_ACCOUNT).map_err(|error| AppError::Message(error.to_string()))?;
+    let entry = Entry::new(OAUTH_SERVICE, OAUTH_ACCOUNT)
+        .map_err(|error| AppError::Message(error.to_string()))?;
     match entry.get_password() {
         Ok(value) => {
-            let session: OAuthSession =
-                serde_json::from_str(&value).map_err(|error| AppError::Message(error.to_string()))?;
+            let session: OAuthSession = serde_json::from_str(&value)
+                .map_err(|error| AppError::Message(error.to_string()))?;
             Ok(Some(session))
         }
         Err(keyring::Error::NoEntry) => Ok(None),
         Err(error) => Err(AppError::Message(error.to_string())),
     }
+}
+
+async fn ensure_fresh_session() -> Result<Option<OAuthSession>, AppError> {
+    let Some(session) = load_oauth_session()? else {
+        return Ok(None);
+    };
+
+    if !is_expired(&session, 60) {
+        return Ok(Some(session));
+    }
+
+    let refreshed = refresh_session(&session).await?;
+    save_oauth_session(&refreshed)?;
+    Ok(Some(refreshed))
 }
 
 fn wait_for_callback(expected_state: &str) -> Result<CallbackPayload, AppError> {
@@ -315,7 +336,8 @@ fn wait_for_callback(expected_state: &str) -> Result<CallbackPayload, AppError> 
     }
 
     Ok(CallbackPayload {
-        code: code.ok_or_else(|| AppError::Message("OAuth callback is missing code".to_string()))?,
+        code: code
+            .ok_or_else(|| AppError::Message("OAuth callback is missing code".to_string()))?,
     })
 }
 
