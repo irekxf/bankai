@@ -4,7 +4,7 @@ use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use crate::error::AppError;
+use crate::{error::AppError, oauth::get_oauth_bearer_token};
 
 const OPENAI_SERVICE: &str = "bankai.openai";
 const OPENAI_ACCOUNT: &str = "default";
@@ -71,6 +71,22 @@ pub fn load_openai_api_key() -> Result<String, AppError> {
     }
 
     Ok(trimmed)
+}
+
+pub async fn load_openai_bearer_token() -> Result<String, AppError> {
+    if let Ok(api_key) = load_openai_api_key() {
+        if !api_key.trim().is_empty() {
+            return Ok(api_key);
+        }
+    }
+
+    if let Some(token) = get_oauth_bearer_token().await? {
+        return Ok(token);
+    }
+
+    Err(AppError::Message(
+        "No OpenAI API key or OAuth session is configured.".to_string(),
+    ))
 }
 
 pub fn save_provider_config(

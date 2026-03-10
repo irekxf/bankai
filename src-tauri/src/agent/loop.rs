@@ -4,8 +4,12 @@ use uuid::Uuid;
 
 use crate::{
     agent::approval::PendingApproval,
-    db::{messages::create_message, sessions::{ensure_session, touch_session}},
-    providers::openai::stream_chat_response,
+    db::{
+        messages::create_message,
+        sessions::{ensure_session, touch_session},
+        tool_calls::create_pending_tool_call,
+    },
+    providers::openai::{create_tool_aware_response, ModelTurn},
     settings::load_provider_config,
     state::AppState,
 };
@@ -49,53 +53,18 @@ pub async fn start_message_run(
         .await
         .map_err(|error| error.to_string())?;
 
-    if let Some(command) = text.strip_prefix("/shell ").map(str::trim).filter(|value| !value.is_empty()) {
-        let approval = PendingApproval {
-            id: Uuid::new_v4().to_string(),
-            session_id: session_id.clone(),
-            tool_name: "shell".to_string(),
-            arguments_json: format!(r#"{{"command":"{}"}}"#, command.replace('"', "\\\"")),
-        };
-
-        {
-            let state = app.state::<AppState>();
-            let mut approval_state = state.approval.lock().await;
-            approval_state.pending.push(approval.clone());
-        }
-
-        app.emit("agent:tool-call-request", &approval)
+    match create_tool_aware_response(&config, &text).await {
+        Ok(ModelTurn::Text(full_response)) => {
+            let message_id = Uuid::new_v4().to_string();
+            app.emit(
+                "agent:message-delta",
+                MessageDeltaPayload {
+                    session_id: session_id.clone(),
+                    message_id,
+                    delta: full_response.clone(),
+                },
+            )
             .map_err(|error| error.to_string())?;
-        app.emit(
-            "agent:status",
-            AgentStatusPayload {
-                status: "awaiting_approval",
-            },
-        )
-        .map_err(|error| error.to_string())?;
-        touch_session(&db, &session_id, Some("/shell request"))
-            .await
-            .map_err(|error| error.to_string())?;
-        return Ok(());
-    }
-
-    let message_id = Uuid::new_v4().to_string();
-    let mut full_response = String::new();
-
-    match stream_chat_response(&config, &text, |delta| {
-        full_response.push_str(&delta);
-        app.emit(
-            "agent:message-delta",
-            MessageDeltaPayload {
-                session_id: session_id.clone(),
-                message_id: message_id.clone(),
-                delta,
-            },
-        )
-        .map_err(|error| crate::error::AppError::Message(error.to_string()))
-    })
-    .await
-    {
-        Ok(()) => {
             create_message(&db, &session_id, "assistant", &full_response)
                 .await
                 .map_err(|error| error.to_string())?;
@@ -104,6 +73,40 @@ pub async fn start_message_run(
                 .await
                 .map_err(|error| error.to_string())?;
             app.emit("agent:status", AgentStatusPayload { status: "idle" })
+                .map_err(|error| error.to_string())?;
+            Ok(())
+        }
+        Ok(ModelTurn::ToolCall(call)) => {
+            let approval = PendingApproval {
+                id: Uuid::new_v4().to_string(),
+                session_id: session_id.clone(),
+                response_id: Some(call.response_id),
+                tool_call_id: Some(call.call_id),
+                tool_name: call.name,
+                arguments_json: call.arguments,
+            };
+
+            create_pending_tool_call(&db, &approval)
+                .await
+                .map_err(|error| error.to_string())?;
+
+            {
+                let state = app.state::<AppState>();
+                let mut approval_state = state.approval.lock().await;
+                approval_state.pending.push(approval.clone());
+            }
+
+            app.emit("agent:tool-call-request", &approval)
+                .map_err(|error| error.to_string())?;
+            app.emit(
+                "agent:status",
+                AgentStatusPayload {
+                    status: "awaiting_approval",
+                },
+            )
+            .map_err(|error| error.to_string())?;
+            touch_session(&db, &session_id, Some("tool request"))
+                .await
                 .map_err(|error| error.to_string())?;
             Ok(())
         }

@@ -27,6 +27,22 @@ export interface ProviderConfigDto {
   apiKeyStatus: "missing" | "configured";
 }
 
+export interface PendingToolCallDto {
+  id: string;
+  sessionId: string;
+  responseId?: string;
+  toolCallId?: string;
+  toolName: string;
+  argumentsJson: string;
+}
+
+export interface OAuthStatusDto {
+  loggedIn: boolean;
+  authMode?: string;
+  accountId?: string;
+  expiresAt?: number;
+}
+
 export interface SaveProviderConfigPayload {
   provider: "openai";
   displayName: string;
@@ -49,6 +65,18 @@ export async function createSession(title?: string): Promise<SessionDto> {
 
 export async function getSessionMessages(sessionId: string): Promise<MessageDto[]> {
   return invoke<MessageDto[]>("get_session_messages", { sessionId });
+}
+
+export async function listPendingToolCalls(): Promise<PendingToolCallDto[]> {
+  return invoke<PendingToolCallDto[]>("list_pending_tool_calls");
+}
+
+export async function getOAuthStatus(): Promise<OAuthStatusDto> {
+  return invoke<OAuthStatusDto>("get_oauth_status_command");
+}
+
+export async function startOAuthLogin(): Promise<OAuthStatusDto> {
+  return invoke<OAuthStatusDto>("start_oauth_login_command");
 }
 
 export async function approveToolCall(callId: string): Promise<void> {

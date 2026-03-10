@@ -1,6 +1,7 @@
 <script lang="ts">
   import "@material/web/all.js";
   import ChatView from "../components/chat/ChatView.svelte";
+  import OAuthOnboarding from "../components/settings/OAuthOnboarding.svelte";
   import ProviderConfig from "../components/settings/ProviderConfig.svelte";
   import SessionList from "../components/sidebar/SessionList.svelte";
   import { agentStatus } from "../lib/stores/agent";
@@ -11,6 +12,8 @@
 </svelte:head>
 
 <main class="shell">
+  <OAuthOnboarding />
+
   <section class="hero">
     <div>
       <p class="eyebrow">Bankai</p>

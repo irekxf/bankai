@@ -1,17 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { getProviderConfig, saveProviderConfig } from "../../lib/tauri/commands";
+  import { getOAuthStatus, getProviderConfig, saveProviderConfig } from "../../lib/tauri/commands";
+  import { oauthStatus } from "../../lib/stores/auth";
   import { providerSettings } from "../../lib/stores/settings";
 
   onMount(async () => {
     try {
-      const config = await getProviderConfig();
+      const [config, oauth] = await Promise.all([getProviderConfig(), getOAuthStatus()]);
       providerSettings.update((current) => ({
         ...current,
         ...config,
         apiKeyDraft: "",
         saveState: "idle"
       }));
+      oauthStatus.set(oauth);
     } catch {
       providerSettings.update((current) => ({ ...current, saveState: "error" }));
     }
@@ -55,9 +57,12 @@
       <p class="eyebrow">Provider</p>
       <h3>{$providerSettings.displayName}</h3>
     </div>
-    <span class:ready={$providerSettings.apiKeyStatus === "configured"}>
-      {$providerSettings.apiKeyStatus}
-    </span>
+    <div class="status-stack">
+      <span class:ready={$providerSettings.apiKeyStatus === "configured"}>
+        api key: {$providerSettings.apiKeyStatus}
+      </span>
+      <span class:ready={$oauthStatus.loggedIn}>oauth: {$oauthStatus.loggedIn ? "connected" : "missing"}</span>
+    </div>
   </div>
 
   <div class="grid">
@@ -126,6 +131,12 @@
   .header {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
+  }
+
+  .status-stack {
+    display: grid;
+    gap: 0.25rem;
+    justify-items: end;
   }
 
   .grid {

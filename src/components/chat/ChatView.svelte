@@ -15,9 +15,28 @@
     onAgentToolCallRequest,
     onAgentToolCallResult
   } from "../../lib/tauri/events";
+  import { listPendingToolCalls, type PendingToolCallDto } from "../../lib/tauri/commands";
   import ApprovalPanel from "./ApprovalPanel.svelte";
   import ChatInput from "./ChatInput.svelte";
   import MessageBubble from "./MessageBubble.svelte";
+
+  function formatToolPreview(toolName: string, argumentsJson: string): string {
+    try {
+      const payload = JSON.parse(argumentsJson) as Record<string, string>;
+      if (toolName === "shell") {
+        return payload.command ?? argumentsJson;
+      }
+      if (toolName === "filesystem") {
+        const action = payload.action ?? "unknown";
+        const path = payload.path ?? "";
+        return `${action} ${path}`.trim();
+      }
+    } catch {
+      return argumentsJson;
+    }
+
+    return argumentsJson;
+  }
 
   $effect(() => {
     if ($currentSessionId) {
@@ -27,6 +46,17 @@
 
   onMount(() => {
     const unlisteners: Array<() => void> = [];
+
+    void listPendingToolCalls().then((items: PendingToolCallDto[]) => {
+      pendingToolCalls.set(
+        items.map((item: PendingToolCallDto) => ({
+          id: item.id,
+          sessionId: item.sessionId,
+          name: item.toolName,
+          argumentsPreview: formatToolPreview(item.toolName, item.argumentsJson)
+        }))
+      );
+    });
 
     void onAgentStatus((payload) => {
       agentStatus.set(payload.status);
@@ -52,7 +82,7 @@
           id: payload.id,
           sessionId: payload.sessionId,
           name: payload.toolName,
-          argumentsPreview: payload.argumentsJson
+          argumentsPreview: formatToolPreview(payload.toolName, payload.argumentsJson)
         }
       ]);
     }).then((unlisten) => unlisteners.push(unlisten));
