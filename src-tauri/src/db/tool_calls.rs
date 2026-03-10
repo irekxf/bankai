@@ -18,7 +18,15 @@ pub async fn create_pending_tool_call(
 ) -> Result<(), AppError> {
     sqlx::query(
         r#"
-        INSERT INTO tool_calls (id, session_id, response_id, tool_call_id, tool_name, arguments_json, status)
+        INSERT INTO tool_calls (
+            id,
+            session_id,
+            response_id,
+            tool_call_id,
+            tool_name,
+            arguments_json,
+            status
+        )
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending')
         "#,
     )
@@ -38,7 +46,13 @@ pub async fn create_pending_tool_call(
 pub async fn list_pending_tool_calls(pool: &SqlitePool) -> Result<Vec<PendingApproval>, AppError> {
     let records = sqlx::query_as::<_, ToolCallRecord>(
         r#"
-        SELECT id, session_id, response_id, tool_call_id, tool_name, arguments_json
+        SELECT
+            id,
+            session_id,
+            response_id,
+            tool_call_id,
+            tool_name,
+            arguments_json
         FROM tool_calls
         WHERE status = 'pending'
         ORDER BY created_at ASC, id ASC
@@ -75,6 +89,79 @@ pub async fn mark_tool_call_status(
     )
     .bind(id)
     .bind(status)
+    .execute(pool)
+    .await
+    .map_err(|error| AppError::Message(error.to_string()))?;
+
+    Ok(())
+}
+
+pub async fn attach_request_message(
+    pool: &SqlitePool,
+    id: &str,
+    request_message_id: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        r#"
+        UPDATE tool_calls
+        SET request_message_id = ?2
+        WHERE id = ?1
+        "#,
+    )
+    .bind(id)
+    .bind(request_message_id)
+    .execute(pool)
+    .await
+    .map_err(|error| AppError::Message(error.to_string()))?;
+
+    Ok(())
+}
+
+pub async fn complete_tool_call(
+    pool: &SqlitePool,
+    id: &str,
+    result_text: &str,
+    resolution_message_id: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        r#"
+        UPDATE tool_calls
+        SET status = 'completed',
+            result_text = ?2,
+            rejection_reason = NULL,
+            resolution_message_id = ?3
+        WHERE id = ?1
+        "#,
+    )
+    .bind(id)
+    .bind(result_text)
+    .bind(resolution_message_id)
+    .execute(pool)
+    .await
+    .map_err(|error| AppError::Message(error.to_string()))?;
+
+    Ok(())
+}
+
+pub async fn reject_tool_call(
+    pool: &SqlitePool,
+    id: &str,
+    rejection_reason: &str,
+    resolution_message_id: &str,
+) -> Result<(), AppError> {
+    sqlx::query(
+        r#"
+        UPDATE tool_calls
+        SET status = 'rejected',
+            rejection_reason = ?2,
+            result_text = NULL,
+            resolution_message_id = ?3
+        WHERE id = ?1
+        "#,
+    )
+    .bind(id)
+    .bind(rejection_reason)
+    .bind(resolution_message_id)
     .execute(pool)
     .await
     .map_err(|error| AppError::Message(error.to_string()))?;

@@ -5,10 +5,10 @@ use uuid::Uuid;
 use crate::{
     agent::approval::PendingApproval,
     db::{
-        messages::create_message,
+        messages::{create_message, create_message_with_metadata, MessageMetadata},
         sessions::{ensure_session, touch_session},
         tools::list_enabled_tool_names,
-        tool_calls::create_pending_tool_call,
+        tool_calls::{attach_request_message, create_pending_tool_call},
     },
     providers::openai::{create_tool_aware_response, ModelTurn},
     settings::load_provider_config,
@@ -95,6 +95,21 @@ pub async fn start_message_run(
             };
 
             create_pending_tool_call(&db, &approval)
+                .await
+                .map_err(|error| error.to_string())?;
+            let request_message = create_message_with_metadata(
+                &db,
+                &session_id,
+                "assistant",
+                &format!("Approval required to run {}.", approval.tool_name),
+                MessageMetadata {
+                    tool_call_id: Some(approval.id.clone()),
+                    tool_message_kind: Some("request".to_string()),
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+            attach_request_message(&db, &approval.id, &request_message.id)
                 .await
                 .map_err(|error| error.to_string())?;
 

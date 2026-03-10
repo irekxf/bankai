@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { agentStatus, pendingToolCalls } from "../../lib/stores/agent";
+  import { get } from "svelte/store";
+  import { formatToolPreview } from "../../lib/chat/toolPreview";
+  import { agentStatus, pendingToolCalls, type PendingToolCall } from "../../lib/stores/agent";
   import {
     appendAssistantDelta,
     appendMessage,
@@ -20,54 +22,24 @@
   import ChatInput from "./ChatInput.svelte";
   import MessageBubble from "./MessageBubble.svelte";
 
-  function formatToolPreview(toolName: string, argumentsJson: string): string {
-    try {
-      const payload = JSON.parse(argumentsJson) as Record<string, string>;
-      if (toolName === "shell") {
-        return payload.command ?? argumentsJson;
-      }
-      if (toolName === "filesystem") {
-        const action = payload.action ?? "unknown";
-        const path = payload.path ?? "";
-        return `${action} ${path}`.trim();
-      }
-      if (toolName === "browser") {
-        const action = payload.action ?? "unknown";
-        const url = payload.url ?? "";
-        return `${action} ${url}`.trim();
-      }
-    } catch {
-      return argumentsJson;
-    }
-
-    return argumentsJson;
-  }
-
   $effect(() => {
-    if ($currentSessionId) {
-      void loadSessionMessages($currentSessionId);
-    }
+    void loadSessionMessages($currentSessionId ?? "");
   });
 
   onMount(() => {
     const unlisteners: Array<() => void> = [];
 
-    void listPendingToolCalls().then((items: PendingToolCallDto[]) => {
-      pendingToolCalls.set(
-        items.map((item: PendingToolCallDto) => ({
-          id: item.id,
-          sessionId: item.sessionId,
-          name: item.toolName,
-          argumentsPreview: formatToolPreview(item.toolName, item.argumentsJson)
-        }))
-      );
-    });
+    void loadPendingApprovals();
 
     void onAgentStatus((payload) => {
       agentStatus.set(payload.status);
     }).then((unlisten) => unlisteners.push(unlisten));
 
     void onAgentMessageDelta((payload) => {
+      if (payload.sessionId !== get(currentSessionId)) {
+        return;
+      }
+
       appendAssistantDelta(payload.messageId, payload.delta);
     }).then((unlisten) => unlisteners.push(unlisten));
 
@@ -75,25 +47,28 @@
       appendMessage({
         id: crypto.randomUUID(),
         role: "assistant",
-        content: `Ошибка агента: ${payload.message}`,
+        content: `Agent error: ${payload.message}`,
         createdAt: new Date().toISOString()
       });
     }).then((unlisten) => unlisteners.push(unlisten));
 
     void onAgentToolCallRequest((payload) => {
-      pendingToolCalls.update((items) => [
-        ...items,
-        {
-          id: payload.id,
-          sessionId: payload.sessionId,
-          name: payload.toolName,
-          argumentsPreview: formatToolPreview(payload.toolName, payload.argumentsJson)
-        }
-      ]);
+      upsertPendingApproval({
+        id: payload.id,
+        sessionId: payload.sessionId,
+        name: payload.toolName,
+        argumentsPreview: formatToolPreview(payload.toolName, payload.argumentsJson)
+      });
+
+      if (payload.sessionId === get(currentSessionId)) {
+        void loadSessionMessages(payload.sessionId);
+      }
     }).then((unlisten) => unlisteners.push(unlisten));
 
     void onAgentToolCallResult((payload) => {
-      if (payload.sessionId === $currentSessionId) {
+      pendingToolCalls.update((items) => items.filter((item) => item.id !== payload.callId));
+
+      if (payload.sessionId === get(currentSessionId)) {
         void loadSessionMessages(payload.sessionId);
       }
     }).then((unlisten) => unlisteners.push(unlisten));
@@ -104,6 +79,30 @@
       }
     };
   });
+
+  async function loadPendingApprovals(): Promise<void> {
+    const items = await listPendingToolCalls();
+    pendingToolCalls.set(items.map(mapPendingApproval));
+  }
+
+  function mapPendingApproval(item: PendingToolCallDto): PendingToolCall {
+    return {
+      id: item.id,
+      sessionId: item.sessionId,
+      name: item.toolName,
+      argumentsPreview: formatToolPreview(item.toolName, item.argumentsJson)
+    };
+  }
+
+  function upsertPendingApproval(next: PendingToolCall): void {
+    pendingToolCalls.update((items) => {
+      if (items.some((item) => item.id === next.id)) {
+        return items;
+      }
+
+      return [...items, next];
+    });
+  }
 </script>
 
 <section class="chat-shell">

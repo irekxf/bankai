@@ -17,22 +17,23 @@ The repository already contains a working vertical slice, but core systems are s
 - Tool registry state is persisted in SQLite and can be toggled from the UI.
 - User messages can trigger a model response or a tool-call approval flow.
 - Pending tool calls are stored in SQLite.
+- Tool request, result, and rejection activity is now written into the message timeline and linked to persisted `tool_calls`.
+- Chat history now restores structured tool metadata from the database and renders it in the UI.
 - Shell, filesystem, and browser tool foundations exist.
 
 ## Known Gaps
 
 - Agent loop is not yet a full multi-step tool loop.
-- Tool-call persistence is still minimal.
 - Some UI strings show encoding issues and need cleanup.
 - Local verification is environment-dependent because Bun/Tauri/Rust setup may differ by machine.
 
 ## Current Priorities
 
-1. Persist richer message and tool-call data.
-2. Improve agent loop for true multi-step runs.
-3. Add baseline CI and PR workflow support.
+1. Improve agent loop for true multi-step runs.
+2. Add baseline CI and PR workflow support.
+3. Continue smoothing chat/history UX details.
 4. Add richer desktop surfaces after core flows are stable.
-5. Continue smoothing chat/history UX details.
+5. Expand tooling and editor surfaces once the agent core is steadier.
 
 ## Important Constraints
 
@@ -45,7 +46,6 @@ The repository already contains a working vertical slice, but core systems are s
 
 On this machine at review time:
 
-- `bun run check` could not be run because `bun` was unavailable in the environment.
-- `cargo check` could not be run because the sandbox could not execute `rustc`.
-
-That means current stage assessment is based on repository contents, not a full local build.
+- `cargo check` passed in `src-tauri` with only an existing incremental-compilation cleanup warning from the local Windows filesystem.
+- `C:\Users\i\.bun\bin\bun.exe run check` passed.
+- `C:\Users\i\.bun\bin\bun.exe run build` passed, with the existing Vite chunk-size warning.

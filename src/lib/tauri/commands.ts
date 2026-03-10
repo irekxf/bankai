@@ -11,11 +11,21 @@ export interface SessionDto {
   updatedAt: string;
 }
 
+export type ToolMessageKindDto = "request" | "result" | "rejection";
+export type ToolCallStatusDto = "pending" | "approved" | "rejected" | "completed";
+
 export interface MessageDto {
   id: string;
   sessionId: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
+  toolCallId?: string;
+  toolMessageKind?: ToolMessageKindDto;
+  toolName?: string;
+  toolStatus?: ToolCallStatusDto;
+  toolArgumentsJson?: string;
+  toolResultText?: string;
+  toolRejectionReason?: string;
   createdAt: string;
 }
 

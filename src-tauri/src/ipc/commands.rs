@@ -4,7 +4,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::{
     agent::{approval::PendingApproval, r#loop::start_message_run},
     db::{
-        messages::{create_message, MessageRecord},
+        messages::{create_message, create_message_with_metadata, MessageMetadata, MessageRecord},
         sessions::{
             create_session as create_session_record, list_sessions as list_session_records,
             SessionSummary,
@@ -14,7 +14,10 @@ use crate::{
             set_tool_enabled as set_tool_enabled_record,
         },
         tool_calls::{
-            list_pending_tool_calls as list_pending_tool_call_records, mark_tool_call_status,
+            complete_tool_call as complete_tool_call_record,
+            list_pending_tool_calls as list_pending_tool_call_records,
+            mark_tool_call_status,
+            reject_tool_call as reject_tool_call_record,
         },
     },
     oauth::{clear_oauth_session, start_oauth_login},
@@ -41,6 +44,17 @@ struct ToolCallResultPayload {
 #[derive(Debug, Clone, Serialize)]
 struct AgentStatusPayload<'a> {
     status: &'a str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ErrorPayload {
+    message: String,
+}
+
+#[derive(Debug, Clone)]
+struct ToolExecutionOutcome {
+    result: String,
+    result_message_id: String,
 }
 
 #[tauri::command]
@@ -98,16 +112,47 @@ pub async fn approve_tool_call(
         approval_state.pending.remove(position)
     };
 
-    let result = run_approved_tool(&app, &pending, &state).await?;
-    mark_tool_call_status(&state.db, &pending.id, "completed")
+    mark_tool_call_status(&state.db, &pending.id, "approved")
         .await
         .map_err(|error| error.to_string())?;
+    app.emit(
+        "agent:status",
+        AgentStatusPayload {
+            status: "executing_tool",
+        },
+    )
+    .map_err(|error| error.to_string())?;
+
+    let execution = match run_approved_tool(&app, &pending, &state).await {
+        Ok(execution) => execution,
+        Err(error) => {
+            app.emit("agent:status", AgentStatusPayload { status: "idle" })
+                .map_err(|emit_error| emit_error.to_string())?;
+            app.emit(
+                "agent:error",
+                ErrorPayload {
+                    message: error.clone(),
+                },
+            )
+            .map_err(|emit_error| emit_error.to_string())?;
+            return Err(error);
+        }
+    };
+
+    complete_tool_call_record(
+        &state.db,
+        &pending.id,
+        &execution.result,
+        &execution.result_message_id,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     app.emit(
         "agent:tool-call-result",
         ToolCallResultPayload {
             call_id: pending.id.clone(),
             session_id: pending.session_id.clone(),
-            result,
+            result: execution.result,
         },
     )
     .map_err(|error| error.to_string())?;
@@ -133,14 +178,20 @@ pub async fn reject_tool_call(
         approval_state.pending.remove(position)
     };
 
-    let message = format!(
-        "Tool call rejected: {}",
-        reason.unwrap_or_else(|| "no reason provided".to_string())
-    );
-    create_message(&state.db, &pending.session_id, "assistant", &message)
-        .await
-        .map_err(|error| error.to_string())?;
-    mark_tool_call_status(&state.db, &pending.id, "rejected")
+    let rejection_reason = reason.unwrap_or_else(|| "No reason provided.".to_string());
+    let message = create_message_with_metadata(
+        &state.db,
+        &pending.session_id,
+        "assistant",
+        &rejection_reason,
+        MessageMetadata {
+            tool_call_id: Some(pending.id.clone()),
+            tool_message_kind: Some("rejection".to_string()),
+        },
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    reject_tool_call_record(&state.db, &pending.id, &rejection_reason, &message.id)
         .await
         .map_err(|error| error.to_string())?;
     app.emit(
@@ -148,7 +199,7 @@ pub async fn reject_tool_call(
         ToolCallResultPayload {
             call_id: pending.id,
             session_id: pending.session_id,
-            result: message,
+            result: rejection_reason,
         },
     )
     .map_err(|error| error.to_string())?;
@@ -237,7 +288,7 @@ async fn run_approved_tool(
     app: &AppHandle,
     pending: &PendingApproval,
     state: &State<'_, AppState>,
-) -> Result<String, String> {
+) -> Result<ToolExecutionOutcome, String> {
     let payload: serde_json::Value =
         serde_json::from_str(&pending.arguments_json).map_err(|error| error.to_string())?;
     let result = match pending.tool_name.as_str() {
@@ -266,11 +317,15 @@ async fn run_approved_tool(
         }
         other => return Err(format!("Unsupported tool {}", other)),
     };
-    create_message(
+    let tool_message = create_message_with_metadata(
         &state.db,
         &pending.session_id,
         "tool",
-        &format!("{}\n{}", pending.tool_name, result),
+        &result,
+        MessageMetadata {
+            tool_call_id: Some(pending.id.clone()),
+            tool_message_kind: Some("result".to_string()),
+        },
     )
     .await
     .map_err(|error| error.to_string())?;
@@ -302,5 +357,8 @@ async fn run_approved_tool(
     )
     .map_err(|error| error.to_string())?;
 
-    Ok(result)
+    Ok(ToolExecutionOutcome {
+        result,
+        result_message_id: tool_message.id,
+    })
 }

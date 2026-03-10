@@ -4,42 +4,42 @@ Last updated: 2026-03-10
 
 ## Best Next Task
 
-Start Task C: persist richer message and tool-call data.
+Start Task D: improve the agent loop for real multi-step runs.
 
 ## Why This Next
 
-- Auth UX and the tool registry are now both in place.
-- Session replay and tool history are still thinner than the product direction expects.
-- Tightening persistence will make the next agent-loop work safer.
+- Auth UX, tool registry, and richer persistence are now all in place.
+- The main product gap is still that the agent stops after a single tool continuation.
+- Multi-step looping is safer now because tool history survives restart and can be inspected from the UI.
 
 ## Start Here
 
 Read these files first:
 
 - [docs/tasks/BACKLOG.md](../tasks/BACKLOG.md)
+- [src-tauri/src/agent/loop.rs](../../src-tauri/src/agent/loop.rs)
+- [src-tauri/src/ipc/commands.rs](../../src-tauri/src/ipc/commands.rs)
+- [src-tauri/src/providers/openai.rs](../../src-tauri/src/providers/openai.rs)
 - [src-tauri/src/db/messages.rs](../../src-tauri/src/db/messages.rs)
 - [src-tauri/src/db/tool_calls.rs](../../src-tauri/src/db/tool_calls.rs)
-- [src-tauri/src/db/mod.rs](../../src-tauri/src/db/mod.rs)
-- [src-tauri/src/ipc/commands.rs](../../src-tauri/src/ipc/commands.rs)
-- [src/lib/tauri/commands.ts](../../src/lib/tauri/commands.ts)
 
 ## Current Focus
 
-- preserve structured tool-call metadata across restart
-- keep assistant/tool timeline reconstructable from the database
-- make returned DTOs explicit enough for future richer chat rendering
+- support repeated tool-call -> approval -> continuation cycles until a final assistant answer is reached
+- keep the approval queue and persisted timeline in sync during multi-step runs
+- avoid regressing the current single-step happy path while expanding the loop
 
 ## Desired Outcome
 
-- Completed and pending tool calls survive restart with enough metadata to replay the session meaningfully.
-- Message and tool-call DTOs stay explicit and typed.
-- Frontend still renders current history correctly while gaining room for richer activity views.
+- The agent can continue after one approved tool result and either finish or request another tool.
+- Persisted messages and tool-call rows stay coherent during each loop step.
+- Frontend still receives the same event shapes while the backend grows more capable.
 
 ## Watch Outs
 
-- Avoid breaking existing session history reads.
-- Keep migrations simple and safe for an existing local SQLite database.
-- Be careful with shared files like `src-tauri/src/ipc/commands.rs` and DTO definitions.
+- Keep loop termination conditions obvious so the app cannot spin forever.
+- Be careful with provider response IDs and function-call IDs across continuation steps.
+- Keep Task D scoped to loop behavior, not a full provider abstraction rewrite.
 
 ## Before Ending The Next Session
 
