@@ -14,6 +14,7 @@ Work rule:
 2. Task B: Add tool registry and tool toggles
 3. Task C: Persist richer message and tool call data
 4. Task D: Improve agent loop for real multi-step runs
+5. Task E: Add PR template and baseline CI checks
 
 ## Task A: Stabilize provider and auth UX
 
@@ -148,6 +149,36 @@ Expected areas:
 - each tool call is persisted before approval
 - session timeline remains readable on frontend
 
+## Task E: Add PR template and baseline CI checks
+
+### Why
+
+Multiple agents will keep opening PRs. The repository needs a minimum review and verification baseline so PR quality does not depend on memory.
+
+### Scope
+
+Add lightweight repository workflow infrastructure:
+- GitHub PR template
+- baseline GitHub Actions workflow for frontend checks
+- if practical, add Rust build or check step that is realistic for the repo state
+
+Expected areas:
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `.github/workflows/*`
+- optional small docs updates if commands or expectations need to be documented
+
+### Deliverable
+
+- PRs open with a consistent structure
+- at least one CI workflow runs on pull requests
+- checks are small and realistic for the current codebase
+
+### Acceptance
+
+- workflow is not overengineered
+- checks match commands that can reasonably pass in this repo
+- PR template aligns with `docs/AGENT_COORDINATION.md`
+
 ## Suggested PR Order
 
 Recommended execution order:
@@ -155,12 +186,14 @@ Recommended execution order:
 2. Task B
 3. Task C
 4. Task D
+5. Task E
 
 Reason:
 - Task A stabilizes the entry path users hit first
 - Task B adds missing configurability for tools
 - Task C stabilizes persistence before deeper loop work
 - Task D is safer after the model and tool data layer is cleaner
+- Task E is useful at any point, but it is best informed by the checks the repo can actually support
 
 ## PR Template For Claude
 
