@@ -9,19 +9,24 @@ use crate::{
             create_session as create_session_record, list_sessions as list_session_records,
             SessionSummary,
         },
+        tools::{
+            list_tool_settings as list_tool_setting_records,
+            set_tool_enabled as set_tool_enabled_record,
+        },
         tool_calls::{
             list_pending_tool_calls as list_pending_tool_call_records, mark_tool_call_status,
         },
     },
-    oauth::{clear_oauth_session, get_oauth_status, start_oauth_login, OAuthStatus},
+    oauth::{clear_oauth_session, start_oauth_login},
     providers::openai::{continue_after_function_output, list_models as list_openai_models},
     settings::{
         load_provider_config, load_provider_status, save_provider_config, set_preferred_auth,
-        PreferredAuth, ProviderConfig, ProviderStatus, SaveProviderConfigInput,
+        PreferredAuth, ProviderStatus, SaveProviderConfigInput,
     },
     state::AppState,
     tools::browser::{execute_browser, BrowserRequest},
     tools::filesystem::{execute_filesystem, FilesystemRequest},
+    tools::{is_builtin_tool, registry_entries, registry_entry, ToolRegistryEntry},
     tools::shell::execute_shell,
 };
 
@@ -153,15 +158,40 @@ pub async fn reject_tool_call(
 }
 
 #[tauri::command]
-pub async fn get_provider_config(app: AppHandle) -> Result<ProviderConfig, String> {
-    load_provider_config(&app).map_err(Into::into)
-}
-
-#[tauri::command]
 pub async fn get_provider_status_command(app: AppHandle) -> Result<ProviderStatus, String> {
     load_provider_status(&app)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn list_tools(state: State<'_, AppState>) -> Result<Vec<ToolRegistryEntry>, String> {
+    let enabled_map = list_tool_setting_records(&state.db)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(registry_entries(&enabled_map))
+}
+
+#[tauri::command]
+pub async fn set_tool_enabled_command(
+    tool_name: String,
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<ToolRegistryEntry, String> {
+    if !is_builtin_tool(&tool_name) {
+        return Err(format!("Unknown tool {}", tool_name));
+    }
+
+    set_tool_enabled_record(&state.db, &tool_name, enabled)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let enabled_map = list_tool_setting_records(&state.db)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    registry_entry(&tool_name, &enabled_map)
+        .ok_or_else(|| format!("Tool {} is missing from the registry", tool_name))
 }
 
 #[tauri::command]
@@ -181,11 +211,6 @@ pub async fn save_provider_config_command(
     load_provider_status(&app)
         .await
         .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-pub async fn get_oauth_status_command() -> Result<OAuthStatus, String> {
-    get_oauth_status().await.map_err(Into::into)
 }
 
 #[tauri::command]

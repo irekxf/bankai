@@ -19,16 +19,13 @@ export interface MessageDto {
   createdAt: string;
 }
 
-export interface ProviderConfigDto {
+export interface ProviderStatusDto {
   provider: "openai";
   displayName: string;
   baseUrl: string;
   model: string;
   preferredAuth: "auto" | "api_key" | "oauth";
   apiKeyStatus: "missing" | "configured";
-}
-
-export interface ProviderStatusDto extends ProviderConfigDto {
   oauthLoggedIn: boolean;
   oauthAuthMode?: string;
   oauthAccountId?: string;
@@ -36,7 +33,6 @@ export interface ProviderStatusDto extends ProviderConfigDto {
   activeAuth: "api_key" | "oauth" | "none";
   authReady: boolean;
   canLoadModels: boolean;
-  canSendMessages: boolean;
   authMessage: string;
 }
 
@@ -49,15 +45,12 @@ export interface PendingToolCallDto {
   argumentsJson: string;
 }
 
-export interface OAuthStatusDto {
-  loggedIn: boolean;
-  authMode?: string;
-  accountId?: string;
-  expiresAt?: number;
-}
-
-export interface ProviderModelsDto {
-  models: string[];
+export interface ToolRegistryEntryDto {
+  name: string;
+  displayName: string;
+  description: string;
+  enabled: boolean;
+  requiresApproval: boolean;
 }
 
 export interface SaveProviderConfigPayload {
@@ -89,8 +82,15 @@ export async function listPendingToolCalls(): Promise<PendingToolCallDto[]> {
   return invoke<PendingToolCallDto[]>("list_pending_tool_calls");
 }
 
-export async function getOAuthStatus(): Promise<OAuthStatusDto> {
-  return invoke<OAuthStatusDto>("get_oauth_status_command");
+export async function listTools(): Promise<ToolRegistryEntryDto[]> {
+  return invoke<ToolRegistryEntryDto[]>("list_tools");
+}
+
+export async function setToolEnabled(
+  toolName: string,
+  enabled: boolean
+): Promise<ToolRegistryEntryDto> {
+  return invoke<ToolRegistryEntryDto>("set_tool_enabled_command", { toolName, enabled });
 }
 
 export async function startOAuthLogin(): Promise<ProviderStatusDto> {
@@ -107,10 +107,6 @@ export async function approveToolCall(callId: string): Promise<void> {
 
 export async function rejectToolCall(callId: string, reason?: string): Promise<void> {
   await invoke("reject_tool_call", { callId, reason });
-}
-
-export async function getProviderConfig(): Promise<ProviderConfigDto> {
-  return invoke<ProviderConfigDto>("get_provider_config");
 }
 
 export async function getProviderStatus(): Promise<ProviderStatusDto> {

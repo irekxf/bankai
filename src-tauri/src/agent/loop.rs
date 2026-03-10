@@ -7,6 +7,7 @@ use crate::{
     db::{
         messages::create_message,
         sessions::{ensure_session, touch_session},
+        tools::list_enabled_tool_names,
         tool_calls::create_pending_tool_call,
     },
     providers::openai::{create_tool_aware_response, ModelTurn},
@@ -53,7 +54,11 @@ pub async fn start_message_run(
         .await
         .map_err(|error| error.to_string())?;
 
-    match create_tool_aware_response(&config, &text).await {
+    let enabled_tool_names = list_enabled_tool_names(&db)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    match create_tool_aware_response(&config, &text, &enabled_tool_names).await {
         Ok(ModelTurn::Text(full_response)) => {
             let message_id = Uuid::new_v4().to_string();
             app.emit(

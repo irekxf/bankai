@@ -5,46 +5,14 @@
     startOAuthLogin,
     type ProviderStatusDto
   } from "../../lib/tauri/commands";
-  import { oauthLoginState, oauthStatus } from "../../lib/stores/auth";
-  import { providerSettings } from "../../lib/stores/settings";
+  import { oauthLoginState } from "../../lib/stores/auth";
+  import { applyProviderStatus } from "../../lib/stores/providerStatus";
 
   let shouldShow = $state(false);
 
   onMount(async () => {
     await refreshState();
   });
-
-  function syncProviderStatus(status: ProviderStatusDto) {
-    oauthStatus.set({
-      loggedIn: status.oauthLoggedIn,
-      authMode: status.oauthAuthMode,
-      accountId: status.oauthAccountId,
-      expiresAt: status.oauthExpiresAt
-    });
-
-    oauthLoginState.update((current) => {
-      if (status.oauthLoggedIn) {
-        return "connected";
-      }
-
-      return current === "connected" ? "idle" : current;
-    });
-
-    providerSettings.update((current) => ({
-      ...current,
-      provider: status.provider,
-      displayName: status.displayName,
-      baseUrl: status.baseUrl,
-      model: status.model,
-      preferredAuth: status.preferredAuth,
-      apiKeyStatus: status.apiKeyStatus,
-      activeAuth: status.activeAuth,
-      authReady: status.authReady,
-      authMessage: status.authMessage,
-      canLoadModels: status.canLoadModels,
-      canSendMessages: status.canSendMessages
-    }));
-  }
 
   function shouldShowOnboarding(provider: ProviderStatusDto) {
     return (
@@ -58,7 +26,7 @@
   async function refreshState() {
     try {
       const status = await getProviderStatus();
-      syncProviderStatus(status);
+      applyProviderStatus(status);
       shouldShow = shouldShowOnboarding(status);
     } catch {
       oauthLoginState.set("error");
@@ -70,7 +38,7 @@
     oauthLoginState.set("launching");
     try {
       const status = await startOAuthLogin();
-      syncProviderStatus(status);
+      applyProviderStatus(status);
       oauthLoginState.set(status.oauthLoggedIn ? "connected" : "error");
       shouldShow = shouldShowOnboarding(status);
     } catch {

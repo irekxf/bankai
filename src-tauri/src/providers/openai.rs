@@ -1,17 +1,16 @@
 use async_openai::{
     config::OpenAIConfig,
     types::responses::{
-        CreateResponseArgs, FunctionCallOutputItemParam, FunctionTool, Item, OutputItem, Response,
-        Tool,
+        CreateResponseArgs, FunctionCallOutputItemParam, Item, OutputItem, Response,
     },
     Client,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use crate::{
     error::AppError,
     settings::{load_openai_bearer_token, ProviderConfig},
+    tools::response_tools_for_names,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,13 +52,21 @@ pub async fn list_models(config: &ProviderConfig) -> Result<Vec<String>, AppErro
 pub async fn create_tool_aware_response(
     config: &ProviderConfig,
     prompt: &str,
+    enabled_tool_names: &[String],
 ) -> Result<ModelTurn, AppError> {
     let client = build_client(config).await?;
-    let request = CreateResponseArgs::default()
+    let tool_definitions = response_tools_for_names(enabled_tool_names);
+    let mut request = CreateResponseArgs::default();
+    let mut request = request
         .model(config.model.clone())
         .input(prompt)
-        .parallel_tool_calls(false)
-        .tools(vec![shell_tool(), filesystem_tool(), browser_tool()])
+        .parallel_tool_calls(false);
+
+    if !tool_definitions.is_empty() {
+        request = request.tools(tool_definitions);
+    }
+
+    let request = request
         .build()
         .map_err(|error| AppError::Message(error.to_string()))?;
 
@@ -110,83 +117,6 @@ async fn build_client(config: &ProviderConfig) -> Result<Client<OpenAIConfig>, A
         .with_api_key(api_key)
         .with_api_base(config.base_url.clone());
     Ok(Client::with_config(openai_config))
-}
-
-fn shell_tool() -> Tool {
-    Tool::Function(FunctionTool {
-        name: "shell".to_string(),
-        description: Some(
-            "Run a shell command on the local machine. Use only when necessary.".to_string(),
-        ),
-        parameters: Some(json!({
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "Powershell command to execute"
-                }
-            },
-            "required": ["command"],
-            "additionalProperties": false
-        })),
-        strict: Some(true),
-    })
-}
-
-fn filesystem_tool() -> Tool {
-    Tool::Function(FunctionTool {
-        name: "filesystem".to_string(),
-        description: Some(
-            "Read files, write files, or list directory contents on the local workspace."
-                .to_string(),
-        ),
-        parameters: Some(json!({
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["read_file", "write_file", "list_dir"]
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Absolute or workspace-relative path"
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Required when action is write_file"
-                }
-            },
-            "required": ["action", "path"],
-            "additionalProperties": false
-        })),
-        strict: Some(true),
-    })
-}
-
-fn browser_tool() -> Tool {
-    Tool::Function(FunctionTool {
-        name: "browser".to_string(),
-        description: Some(
-            "Open a web page in the user's browser or read a web page into text. Use when the user asks to open, navigate to, or inspect a site."
-                .to_string(),
-        ),
-        parameters: Some(json!({
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["open_url", "read_page"]
-                },
-                "url": {
-                    "type": "string",
-                    "description": "http or https URL to open or read"
-                }
-            },
-            "required": ["action", "url"],
-            "additionalProperties": false
-        })),
-        strict: Some(true),
-    })
 }
 
 fn map_response_turn(response: Response) -> Result<ModelTurn, AppError> {

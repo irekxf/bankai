@@ -1,5 +1,6 @@
 pub mod messages;
 pub mod sessions;
+pub mod tools;
 pub mod tool_calls;
 
 use sqlx::{
@@ -78,6 +79,20 @@ pub async fn init(app: &AppHandle) -> Result<SqlitePool, AppError> {
     .execute(&pool)
     .await
     .map_err(|error| AppError::Message(error.to_string()))?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS tool_settings (
+            name TEXT PRIMARY KEY,
+            enabled INTEGER NOT NULL CHECK (enabled IN (0, 1))
+        );
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .map_err(|error| AppError::Message(error.to_string()))?;
+
+    tools::seed_tool_settings(&pool).await?;
 
     Ok(pool)
 }

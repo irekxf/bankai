@@ -21,7 +21,6 @@ export interface ProviderSettings {
   authReady: boolean;
   authMessage: string;
   canLoadModels: boolean;
-  canSendMessages: boolean;
   apiKeyDraft: string;
   saveState: ProviderSaveState;
   saveError: string | null;
@@ -46,7 +45,6 @@ export const providerSettings = writable<ProviderSettings>({
   authMessage:
     "Choose either OAuth or API key. Until one is configured, the provider cannot load models or send requests.",
   canLoadModels: false,
-  canSendMessages: false,
   apiKeyDraft: "",
   saveState: "idle",
   saveError: null

@@ -56,7 +56,6 @@ pub struct ProviderStatus {
     pub active_auth: ActiveAuth,
     pub auth_ready: bool,
     pub can_load_models: bool,
-    pub can_send_messages: bool,
     pub auth_message: String,
 }
 
@@ -252,7 +251,6 @@ fn build_provider_status(config: ProviderConfig, oauth: OAuthStatus) -> Provider
         active_auth,
         auth_ready,
         can_load_models: auth_ready,
-        can_send_messages: auth_ready,
         auth_message: build_auth_message(config.preferred_auth, active_auth),
     }
 }

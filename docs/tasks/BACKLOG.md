@@ -14,7 +14,7 @@ Last updated: 2026-03-10
 | ID | Task | Status | Why it matters | Main areas |
 | --- | --- | --- | --- | --- |
 | A | Stabilize provider and auth UX | done | Make auth state understandable and reliable | `src/components/settings`, `src/lib/stores`, `src-tauri/src/settings.rs`, `src-tauri/src/ipc/commands.rs` |
-| B | Add tool registry and tool toggles | todo | Stop treating all tools as always enabled | `src-tauri/src/tools`, `src-tauri/src/db`, frontend settings UI |
+| B | Add tool registry and tool toggles | done | Stop treating all tools as always enabled | `src-tauri/src/tools`, `src-tauri/src/db`, frontend settings UI |
 | C | Persist richer message and tool-call data | todo | Make session replay and tool history reliable | `src-tauri/src/db`, DTOs, chat rendering |
 | D | Improve agent loop for real multi-step runs | todo | Support sequential tool usage before final answer | `src-tauri/src/agent/loop.rs`, provider integration |
 | E | Add PR template and baseline CI checks | todo | Standardize team workflow and verification | `.github/`, docs |
@@ -31,6 +31,7 @@ Last updated: 2026-03-10
 ### B. Add tool registry and tool toggles
 
 - Goal: list tools from backend and let user enable or disable them.
+- Outcome: backend tool registry is persisted in SQLite, UI toggles update it, and disabled tools are excluded from provider requests.
 - Deliverable: model receives only enabled tools.
 - Dependencies: none, but easier after task A.
 

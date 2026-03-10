@@ -3,6 +3,7 @@
   import ChatView from "../components/chat/ChatView.svelte";
   import OAuthOnboarding from "../components/settings/OAuthOnboarding.svelte";
   import ProviderConfig from "../components/settings/ProviderConfig.svelte";
+  import ToolRegistry from "../components/settings/ToolRegistry.svelte";
   import SessionList from "../components/sidebar/SessionList.svelte";
   import { agentStatus } from "../lib/stores/agent";
 </script>
@@ -29,6 +30,7 @@
     <div class="sidebar-stack">
       <SessionList />
       <ProviderConfig />
+      <ToolRegistry />
     </div>
     <ChatView />
   </section>

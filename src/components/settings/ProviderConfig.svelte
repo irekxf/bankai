@@ -5,10 +5,10 @@
     getProviderStatus,
     listProviderModels,
     saveProviderConfig,
-    startOAuthLogin,
-    type ProviderStatusDto
+    startOAuthLogin
   } from "../../lib/tauri/commands";
   import { oauthLoginState, oauthStatus } from "../../lib/stores/auth";
+  import { applyProviderStatus } from "../../lib/stores/providerStatus";
   import { providerSettings } from "../../lib/stores/settings";
 
   type PresetKey = "default" | "fast" | "reasoning" | "coding";
@@ -24,7 +24,7 @@
   onMount(async () => {
     try {
       const status = await getProviderStatus();
-      syncProviderStatus(status, {
+      applyProviderStatus(status, {
         clearApiKeyDraft: true,
         saveState: "idle",
         saveError: null
@@ -54,48 +54,6 @@
     }
 
     return fallback;
-  }
-
-  function syncProviderStatus(
-    status: ProviderStatusDto,
-    options: {
-      clearApiKeyDraft?: boolean;
-      saveState?: "idle" | "saving" | "saved" | "error";
-      saveError?: string | null;
-    } = {}
-  ) {
-    oauthStatus.set({
-      loggedIn: status.oauthLoggedIn,
-      authMode: status.oauthAuthMode,
-      accountId: status.oauthAccountId,
-      expiresAt: status.oauthExpiresAt
-    });
-
-    oauthLoginState.update((current) => {
-      if (status.oauthLoggedIn) {
-        return "connected";
-      }
-
-      return current === "connected" ? "idle" : current;
-    });
-
-    providerSettings.update((current) => ({
-      ...current,
-      provider: status.provider,
-      displayName: status.displayName,
-      baseUrl: status.baseUrl,
-      model: status.model,
-      preferredAuth: status.preferredAuth,
-      apiKeyStatus: status.apiKeyStatus,
-      activeAuth: status.activeAuth,
-      authReady: status.authReady,
-      authMessage: status.authMessage,
-      canLoadModels: status.canLoadModels,
-      canSendMessages: status.canSendMessages,
-      apiKeyDraft: options.clearApiKeyDraft ? "" : current.apiKeyDraft,
-      saveState: options.saveState !== undefined ? options.saveState : current.saveState,
-      saveError: options.saveError !== undefined ? options.saveError : current.saveError
-    }));
   }
 
   function hasApiKeyConfigured(): boolean {
@@ -246,7 +204,7 @@
         apiKey: snapshot.apiKeyDraft
       });
 
-      syncProviderStatus(status, {
+      applyProviderStatus(status, {
         clearApiKeyDraft: true,
         saveState: "saved",
         saveError: null
@@ -286,7 +244,7 @@
 
     try {
       const status = await startOAuthLogin();
-      syncProviderStatus(status, {
+      applyProviderStatus(status, {
         saveState: "idle",
         saveError: null
       });
@@ -309,7 +267,7 @@
   async function disconnectOAuth() {
     try {
       const status = await clearOAuthSession();
-      syncProviderStatus(status, {
+      applyProviderStatus(status, {
         saveState: "idle",
         saveError: null
       });
