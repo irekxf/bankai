@@ -86,7 +86,8 @@
       <p class="eyebrow">OpenAI Login</p>
       <h2>Authorize through your browser or continue with API key</h2>
       <p class="copy">
-        Experimental ChatGPT OAuth uses a localhost callback on `http://localhost:1455/auth/callback`.
+        OAuth uses a localhost callback on <code>http://localhost:1455/auth/callback</code> to
+        complete the login flow.
       </p>
 
       <div class="actions">
@@ -114,7 +115,7 @@
         {:else if $oauthLoginState === "error"}
           OAuth login failed. You can retry or use an API key instead.
         {:else}
-          API key support remains available and is the stable path.
+          Both OAuth and API key are supported. Configure either to get started.
         {/if}
       </small>
     </div>

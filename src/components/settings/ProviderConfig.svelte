@@ -97,18 +97,18 @@
 
   function currentAuthLabel(): string {
     if ($providerSettings.preferredAuth === "api_key") {
-      return "API key";
+      return $providerSettings.apiKeyStatus === "configured" ? "API key" : "API key (not set)";
     }
     if ($providerSettings.preferredAuth === "oauth") {
-      return "OAuth";
+      return $oauthStatus.loggedIn ? "OAuth" : "OAuth (not connected)";
     }
     if ($providerSettings.apiKeyStatus === "configured") {
-      return "Auto -> API key";
+      return "Auto → API key";
     }
     if ($oauthStatus.loggedIn) {
-      return "Auto -> OAuth";
+      return "Auto → OAuth";
     }
-    return "Not connected";
+    return "Not configured";
   }
 
   function formattedExpiry(): string {
@@ -403,19 +403,19 @@
     </md-filled-button>
   </div>
 
-  <p class="hint">
-    Stable path: API key in keyring. Experimental path: ChatGPT OAuth via localhost callback.
-  </p>
-
   <div class="oauth-panel">
     <div class="oauth-meta">
       <small>
         {#if $oauthStatus.loggedIn}
           OAuth session is stored in the system keyring and refreshed automatically.
         {:else if $providerSettings.preferredAuth === "oauth"}
-          OAuth is selected, but there is no active saved session.
+          OAuth is selected as preferred auth, but no active session found. Connect below.
+        {:else if $providerSettings.preferredAuth === "api_key" && $providerSettings.apiKeyStatus !== "configured"}
+          API key is selected but not saved. Enter your key above and save.
+        {:else if $providerSettings.apiKeyStatus !== "configured"}
+          No auth configured. Enter an API key or connect via OAuth to use the provider.
         {:else}
-          OAuth is optional. You can keep using API key only.
+          OAuth is an additional auth option. API key is already configured.
         {/if}
       </small>
       {#if $oauthStatus.loggedIn}
