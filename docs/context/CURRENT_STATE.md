@@ -1,0 +1,51 @@
+# Current State
+
+Last updated: 2026-03-10
+
+## Stage
+
+Bankai is at the early MVP stage.
+The repository already contains a working vertical slice, but core systems are still incomplete.
+
+## What Works
+
+- Tauri desktop shell is set up.
+- Svelte frontend renders the main app layout.
+- Chat UI, session list, provider settings, and OAuth onboarding exist.
+- OpenAI provider integration is wired through the Rust backend.
+- User messages can trigger a model response or a tool-call approval flow.
+- Pending tool calls are stored in SQLite.
+- Shell, filesystem, and browser tool foundations exist.
+
+## Known Gaps
+
+- Tool registry does not exist yet; tools are still hardcoded.
+- Agent loop is not yet a full multi-step tool loop.
+- Tool-call persistence is still minimal.
+- Auth UX needs cleanup so OAuth and API key flows feel consistent.
+- Some UI strings show encoding issues and need cleanup.
+- Local verification is environment-dependent because Bun/Tauri/Rust setup may differ by machine.
+
+## Current Priorities
+
+1. Stabilize provider and auth UX.
+2. Add tool registry and tool toggles.
+3. Persist richer message and tool-call data.
+4. Improve agent loop for true multi-step runs.
+5. Add baseline CI and PR workflow support.
+
+## Important Constraints
+
+- Approval flow is a core product feature.
+- OAuth and API key are both valid auth modes.
+- Keep PRs small and task-scoped.
+- Prefer updating docs alongside implementation when code changes behavior.
+
+## Verification Notes
+
+On this machine at review time:
+
+- `bun run check` could not be run because `bun` was unavailable in the environment.
+- `cargo check` could not be run because the sandbox could not execute `rustc`.
+
+That means current stage assessment is based on repository contents, not a full local build.
